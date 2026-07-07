@@ -22,6 +22,8 @@ interface Character {
   hasAttackedThisTurn: boolean;
   bodyText: Phaser.GameObjects.Text;
   bodyEmblem: Phaser.GameObjects.Arc;
+  bodySprite: Phaser.GameObjects.Image;
+  bodyParts: Phaser.GameObjects.GameObject[];
   direction: 'NE' | 'SE' | 'SW' | 'NW';
   dirGraphics: Phaser.GameObjects.Graphics;
   hudBarGraphics?: Phaser.GameObjects.Graphics;
@@ -32,6 +34,7 @@ interface Character {
 
 export class GameScene extends Phaser.Scene {
   private turnManager!: TurnManager;
+  private showHeadAvatar = true;
 
   // Grid configuration
   private gridWidth = 10;
@@ -145,11 +148,38 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawPixelArt(
-    _bodyText: Phaser.GameObjects.Text,
-    _skinKey: string,
-    _direction: 'NE' | 'SE' | 'SW' | 'NW' = 'SE'
+    char: Character
   ) {
-    // Emojis shouldn't be mirrored
+    const isMirror = (char.direction === 'SE' || char.direction === 'SW');
+    char.bodySprite.setFlipX(isMirror);
+  }
+
+  private updateCharacterVisualMode(char: Character) {
+    // 2.5D sprite is permanently hidden
+    if (char.bodySprite) {
+      char.bodySprite.setVisible(false);
+    }
+    
+    // Toggle only the head emoji emblem and head text visibility
+    const showHead = this.showHeadAvatar;
+    char.bodyEmblem.setVisible(showHead);
+    char.bodyText.setVisible(showHead);
+
+    // Body parts (trunk, shield, sword, horns, ears) are always visible
+    if (char.bodyParts) {
+      char.bodyParts.forEach(part => {
+        if (part) {
+          (part as any).setVisible(true);
+        }
+      });
+    }
+  }
+
+  private toggleAvatarMode() {
+    this.showHeadAvatar = !this.showHeadAvatar;
+    this.characters.forEach(char => {
+      this.updateCharacterVisualMode(char);
+    });
   }
 
   update() {
@@ -350,6 +380,27 @@ export class GameScene extends Phaser.Scene {
     // 1. Leon (Warrior / Indigo - Melee)
     const leonContainer = this.add.container(0, 0);
     leonContainer.add(this.add.ellipse(0, 0, 48, 24, 0x000000, 0.4)); // shadow
+    
+    // Warrior Sprite (Hidden by default)
+    const leonBody = this.add.image(0, -28, 'char_warrior').setScale(1.92).setOrigin(0.5, 0.95).setVisible(false);
+    leonContainer.add(leonBody);
+
+    // Body & Gear
+    const leonBodyTrunk = this.add.rectangle(0, -10, 24, 16, 0x1e1b4b).setStrokeStyle(1.5, 0x38bdf8, 1);
+    const leonShield = this.add.circle(-18, -14, 10, 0xfacc15).setStrokeStyle(1.5, 0xffffff, 1);
+    const leonSword = this.add.rectangle(18, -14, 6, 20, 0x94a3b8).setAngle(20).setStrokeStyle(1, 0xffffff, 1);
+    const leonHilt = this.add.rectangle(18, -4, 10, 3, 0x78350f).setAngle(20);
+    leonContainer.add(leonBodyTrunk);
+    leonContainer.add(leonShield);
+    leonContainer.add(leonSword);
+    leonContainer.add(leonHilt);
+
+    // Warrior Horns
+    const leonHornL = this.add.triangle(-15, -42, 0, 8, -6, -4, 10, 8, 0xfacc15).setAngle(-25);
+    const leonHornR = this.add.triangle(15, -42, 0, 8, 6, -4, -10, 8, 0xfacc15).setAngle(25);
+    leonContainer.add(leonHornL);
+    leonContainer.add(leonHornR);
+
     const leonEmblem = this.add.circle(0, -28, 22, 0x1e1b4b).setStrokeStyle(2.5, 0x38bdf8, 1);
     const leonText = this.add.text(0, -28, '⚔️', { fontSize: '24px', fontFamily: 'Segoe UI Emoji, Arial' }).setOrigin(0.5);
     leonContainer.add(leonEmblem);
@@ -378,6 +429,8 @@ export class GameScene extends Phaser.Scene {
       hasAttackedThisTurn: false,
       bodyEmblem: leonEmblem,
       bodyText: leonText,
+      bodySprite: leonBody,
+      bodyParts: [leonBodyTrunk, leonShield, leonSword, leonHilt, leonHornL, leonHornR],
       direction: 'SE',
       dirGraphics: leonDirGraphics,
       skinType: 'warrior'
@@ -388,6 +441,23 @@ export class GameScene extends Phaser.Scene {
     // 2. Aisha (Mage / Purple Magenta - Ranged)
     const aishaContainer = this.add.container(0, 0);
     aishaContainer.add(this.add.ellipse(0, 0, 44, 22, 0x000000, 0.4));
+    
+    // Mage Sprite (Hidden by default)
+    const aishaBody = this.add.image(0, -28, 'char_mage').setScale(1.92).setOrigin(0.5, 0.95).setVisible(false);
+    aishaContainer.add(aishaBody);
+
+    // Body & Gear
+    const aishaBodyTrunk = this.add.triangle(0, -8, 0, -18, -13, 2, 13, 2, 0x701a75).setStrokeStyle(1.5, 0xd946ef, 1);
+    const aishaStaff = this.add.rectangle(16, -18, 4, 28, 0xd97706);
+    const aishaOrb = this.add.circle(16, -33, 6, 0x38bdf8).setStrokeStyle(1.5, 0xffffff, 1);
+    aishaContainer.add(aishaBodyTrunk);
+    aishaContainer.add(aishaStaff);
+    aishaContainer.add(aishaOrb);
+
+    // Wizard Hat Top
+    const aishaHat = this.add.triangle(0, -50, 0, 0, -10, 16, 10, 16, 0x701a75).setStrokeStyle(1.5, 0xd946ef, 1);
+    aishaContainer.add(aishaHat);
+
     const aishaEmblem = this.add.circle(0, -28, 22, 0x312e81).setStrokeStyle(2.5, 0x38bdf8, 1);
     const aishaText = this.add.text(0, -28, '🔮', { fontSize: '24px', fontFamily: 'Segoe UI Emoji, Arial' }).setOrigin(0.5);
     aishaContainer.add(aishaEmblem);
@@ -416,6 +486,8 @@ export class GameScene extends Phaser.Scene {
       hasAttackedThisTurn: false,
       bodyEmblem: aishaEmblem,
       bodyText: aishaText,
+      bodySprite: aishaBody,
+      bodyParts: [aishaBodyTrunk, aishaStaff, aishaOrb, aishaHat],
       direction: 'SE',
       dirGraphics: aishaDirGraphics,
       skinType: 'mage'
@@ -426,6 +498,21 @@ export class GameScene extends Phaser.Scene {
     // 3. Roy (Archer / Teal - Long Range)
     const royContainer = this.add.container(0, 0);
     royContainer.add(this.add.ellipse(0, 0, 44, 22, 0x000000, 0.4));
+    
+    // Archer Sprite (Hidden by default)
+    const royBody = this.add.image(0, -28, 'char_archer').setScale(1.92).setOrigin(0.5, 0.95).setVisible(false);
+    royContainer.add(royBody);
+
+    // Body & Gear
+    const royBodyTrunk = this.add.rectangle(0, -10, 20, 16, 0x064e3b).setStrokeStyle(1.5, 0x34d399, 1);
+    const royBow = this.add.triangle(-16, -16, 0, -10, -5, 12, 5, 12, 0x78350f).setAngle(-15).setStrokeStyle(1, 0xfacc15, 1);
+    royContainer.add(royBodyTrunk);
+    royContainer.add(royBow);
+
+    // Archer feather decoration
+    const royFeather = this.add.triangle(15, -42, 0, 10, -4, 0, 6, 0, 0x10b981).setAngle(35);
+    royContainer.add(royFeather);
+
     const royEmblem = this.add.circle(0, -28, 22, 0x064e3b).setStrokeStyle(2.5, 0x38bdf8, 1);
     const royText = this.add.text(0, -28, '🏹', { fontSize: '24px', fontFamily: 'Segoe UI Emoji, Arial' }).setOrigin(0.5);
     royContainer.add(royEmblem);
@@ -454,6 +541,8 @@ export class GameScene extends Phaser.Scene {
       hasAttackedThisTurn: false,
       bodyEmblem: royEmblem,
       bodyText: royText,
+      bodySprite: royBody,
+      bodyParts: [royBodyTrunk, royBow, royFeather],
       direction: 'SE',
       dirGraphics: royDirGraphics,
       skinType: 'archer'
@@ -464,6 +553,21 @@ export class GameScene extends Phaser.Scene {
     // 4. Ren (Cleric / Green - Support)
     const renContainer = this.add.container(0, 0);
     renContainer.add(this.add.ellipse(0, 0, 44, 22, 0x000000, 0.4));
+    
+    // Cleric Sprite (Hidden by default)
+    const renBody = this.add.image(0, -28, 'char_mage').setScale(1.92).setOrigin(0.5, 0.95).setVisible(false);
+    renContainer.add(renBody);
+
+    // Body & Gear
+    const renBodyTrunk = this.add.rectangle(0, -10, 22, 16, 0x1f2937).setStrokeStyle(1.5, 0xffffff, 1);
+    const renBible = this.add.rectangle(0, -8, 14, 10, 0xfef08a).setStrokeStyle(1, 0x78350f, 1);
+    renContainer.add(renBodyTrunk);
+    renContainer.add(renBible);
+
+    // Holy Halo Ring
+    const renHalo = this.add.ellipse(0, -46, 26, 8).setStrokeStyle(2, 0xfacc15, 0.85);
+    renContainer.add(renHalo);
+
     const renEmblem = this.add.circle(0, -28, 22, 0x065f46).setStrokeStyle(2.5, 0x38bdf8, 1);
     const renText = this.add.text(0, -28, '💚', { fontSize: '24px', fontFamily: 'Segoe UI Emoji, Arial' }).setOrigin(0.5);
     renContainer.add(renEmblem);
@@ -492,6 +596,8 @@ export class GameScene extends Phaser.Scene {
       hasAttackedThisTurn: false,
       bodyEmblem: renEmblem,
       bodyText: renText,
+      bodySprite: renBody,
+      bodyParts: [renBodyTrunk, renBible, renHalo],
       direction: 'SE',
       dirGraphics: renDirGraphics,
       skinType: 'cleric'
@@ -502,6 +608,23 @@ export class GameScene extends Phaser.Scene {
     // 5. Kyle (Rogue / Dark Slate - Assassin)
     const kyleContainer = this.add.container(0, 0);
     kyleContainer.add(this.add.ellipse(0, 0, 46, 23, 0x000000, 0.4));
+    
+    // Rogue Sprite (Hidden by default)
+    const kyleBody = this.add.image(0, -28, 'char_warrior').setScale(1.92).setOrigin(0.5, 0.95).setVisible(false);
+    kyleContainer.add(kyleBody);
+
+    // Body & Gear
+    const kyleBodyTrunk = this.add.rectangle(0, -10, 20, 16, 0x1f2937).setStrokeStyle(1.5, 0x4b5563, 1);
+    const kyleDaggerL = this.add.triangle(-14, -14, 0, -8, -3, 8, 3, 8, 0x94a3b8).setAngle(-25).setStrokeStyle(1, 0xef4444, 1);
+    const kyleDaggerR = this.add.triangle(14, -14, 0, -8, -3, 8, 3, 8, 0x94a3b8).setAngle(25).setStrokeStyle(1, 0xef4444, 1);
+    kyleContainer.add(kyleBodyTrunk);
+    kyleContainer.add(kyleDaggerL);
+    kyleContainer.add(kyleDaggerR);
+
+    // Rogue Bandana tail
+    const kyleBandana = this.add.triangle(-15, -20, 0, 4, 10, 0, 4, -10, 0xdc2626).setAngle(-30);
+    kyleContainer.add(kyleBandana);
+
     const kyleEmblem = this.add.circle(0, -28, 22, 0x111827).setStrokeStyle(2.5, 0x38bdf8, 1);
     const kyleText = this.add.text(0, -28, '🗡️', { fontSize: '24px', fontFamily: 'Segoe UI Emoji, Arial' }).setOrigin(0.5);
     kyleContainer.add(kyleEmblem);
@@ -530,6 +653,8 @@ export class GameScene extends Phaser.Scene {
       hasAttackedThisTurn: false,
       bodyEmblem: kyleEmblem,
       bodyText: kyleText,
+      bodySprite: kyleBody,
+      bodyParts: [kyleBodyTrunk, kyleDaggerL, kyleDaggerR, kyleBandana],
       direction: 'SE',
       dirGraphics: kyleDirGraphics,
       skinType: 'rogue'
@@ -544,6 +669,23 @@ export class GameScene extends Phaser.Scene {
     // 1. Goblin Warrior A (Red - Melee)
     const gobAContainer = this.add.container(0, 0);
     gobAContainer.add(this.add.ellipse(0, 0, 48, 24, 0x000000, 0.4));
+    
+    // Goblin Sprite (Hidden by default)
+    const gobABody = this.add.image(0, -28, 'char_goblin').setScale(1.92).setOrigin(0.5, 0.95).setVisible(false);
+    gobAContainer.add(gobABody);
+
+    // Body & Gear
+    const gobABodyTrunk = this.add.rectangle(0, -10, 18, 14, 0x3f6212).setStrokeStyle(1.5, 0x65a30d, 1);
+    const gobADagger = this.add.triangle(14, -12, 0, -6, -3, 6, 3, 6, 0x475569).setAngle(15).setStrokeStyle(1, 0xfee2e2, 1);
+    gobAContainer.add(gobABodyTrunk);
+    gobAContainer.add(gobADagger);
+
+    // Goblin pointy ears
+    const gobAEarL = this.add.triangle(-20, -28, 0, 0, 8, -5, 5, 7, 0x4d7c0f).setAngle(-45);
+    const gobAEarR = this.add.triangle(20, -28, 0, 0, -8, -5, -5, 7, 0x4d7c0f).setAngle(45);
+    gobAContainer.add(gobAEarL);
+    gobAContainer.add(gobAEarR);
+
     const gobAEmblem = this.add.circle(0, -28, 22, 0x450a0a).setStrokeStyle(2.5, 0xf97316, 1);
     const gobAText = this.add.text(0, -28, '👹', { fontSize: '24px', fontFamily: 'Segoe UI Emoji, Arial' }).setOrigin(0.5);
     gobAContainer.add(gobAEmblem);
@@ -572,6 +714,8 @@ export class GameScene extends Phaser.Scene {
       hasAttackedThisTurn: false,
       bodyEmblem: gobAEmblem,
       bodyText: gobAText,
+      bodySprite: gobABody,
+      bodyParts: [gobABodyTrunk, gobADagger, gobAEarL, gobAEarR],
       direction: 'NW',
       dirGraphics: gobADirGraphics,
       skinType: 'gob_warrior'
@@ -582,6 +726,23 @@ export class GameScene extends Phaser.Scene {
     // 2. Goblin Archer B (Orange - Ranged)
     const gobBContainer = this.add.container(0, 0);
     gobBContainer.add(this.add.ellipse(0, 0, 44, 22, 0x000000, 0.4));
+    
+    // Goblin Archer Sprite (Hidden by default)
+    const gobBBody = this.add.image(0, -28, 'char_goblin').setScale(1.92).setOrigin(0.5, 0.95).setVisible(false);
+    gobBContainer.add(gobBBody);
+
+    // Body & Gear
+    const gobBBodyTrunk = this.add.rectangle(0, -10, 18, 14, 0x3f6212).setStrokeStyle(1.5, 0x65a30d, 1);
+    const gobBBow = this.add.triangle(-14, -14, 0, -8, -4, 8, 4, 8, 0x78350f).setAngle(-15).setStrokeStyle(1, 0xfacc15, 1);
+    gobBContainer.add(gobBBodyTrunk);
+    gobBContainer.add(gobBBow);
+
+    // Goblin ears
+    const gobBEarL = this.add.triangle(-20, -28, 0, 0, 8, -5, 5, 7, 0x4d7c0f).setAngle(-45);
+    const gobBEarR = this.add.triangle(20, -28, 0, 0, -8, -5, -5, 7, 0x4d7c0f).setAngle(45);
+    gobBContainer.add(gobBEarL);
+    gobBContainer.add(gobBEarR);
+
     const gobBEmblem = this.add.circle(0, -28, 22, 0x7c2d12).setStrokeStyle(2.5, 0xf97316, 1);
     const gobBText = this.add.text(0, -28, '🏹', { fontSize: '24px', fontFamily: 'Segoe UI Emoji, Arial' }).setOrigin(0.5);
     gobBContainer.add(gobBEmblem);
@@ -610,6 +771,8 @@ export class GameScene extends Phaser.Scene {
       hasAttackedThisTurn: false,
       bodyEmblem: gobBEmblem,
       bodyText: gobBText,
+      bodySprite: gobBBody,
+      bodyParts: [gobBBodyTrunk, gobBBow, gobBEarL, gobBEarR],
       direction: 'NW',
       dirGraphics: gobBDirGraphics,
       skinType: 'gob_archer'
@@ -620,6 +783,27 @@ export class GameScene extends Phaser.Scene {
     // 3. Goblin Shaman C (Crimson - Shaman Mage)
     const gobCContainer = this.add.container(0, 0);
     gobCContainer.add(this.add.ellipse(0, 0, 44, 22, 0x000000, 0.4));
+    
+    // Goblin Shaman Sprite (Hidden by default)
+    const gobCBody = this.add.image(0, -28, 'char_goblin_boss').setScale(1.92).setOrigin(0.5, 0.95).setVisible(false);
+    gobCContainer.add(gobCBody);
+
+    // Body & Gear
+    const gobCBodyTrunk = this.add.triangle(0, -8, 0, -18, -11, 2, 11, 2, 0x881337).setStrokeStyle(1.5, 0xf97316, 1);
+    const gobCStaff = this.add.rectangle(15, -18, 3, 26, 0x78350f);
+    const gobCOrb = this.add.circle(15, -31, 5, 0xa855f7).setStrokeStyle(1, 0xffffff, 1);
+    gobCContainer.add(gobCBodyTrunk);
+    gobCContainer.add(gobCStaff);
+    gobCContainer.add(gobCOrb);
+
+    // Goblin Shaman Feather Crown
+    const gobCFeatherL = this.add.triangle(-6, -46, 0, 14, -3, 0, 3, 0, 0xdc2626).setAngle(-15);
+    const gobCFeatherM = this.add.triangle(0, -50, 0, 16, -3, 0, 3, 0, 0xfacc15);
+    const gobCFeatherR = this.add.triangle(6, -46, 0, 14, -3, 0, 3, 0, 0xdc2626).setAngle(15);
+    gobCContainer.add(gobCFeatherL);
+    gobCContainer.add(gobCFeatherM);
+    gobCContainer.add(gobCFeatherR);
+
     const gobCEmblem = this.add.circle(0, -28, 22, 0x881337).setStrokeStyle(2.5, 0xf97316, 1);
     const gobCText = this.add.text(0, -28, '🧙‍♂️', { fontSize: '24px', fontFamily: 'Segoe UI Emoji, Arial' }).setOrigin(0.5);
     gobCContainer.add(gobCEmblem);
@@ -648,6 +832,8 @@ export class GameScene extends Phaser.Scene {
       hasAttackedThisTurn: false,
       bodyEmblem: gobCEmblem,
       bodyText: gobCText,
+      bodySprite: gobCBody,
+      bodyParts: [gobCBodyTrunk, gobCStaff, gobCOrb, gobCFeatherL, gobCFeatherM, gobCFeatherR],
       direction: 'NW',
       dirGraphics: gobCDirGraphics,
       skinType: 'gob_shaman'
@@ -658,6 +844,25 @@ export class GameScene extends Phaser.Scene {
     // 4. Goblin Assassin D (Dark Brown - Rogue Raider)
     const gobDContainer = this.add.container(0, 0);
     gobDContainer.add(this.add.ellipse(0, 0, 44, 22, 0x000000, 0.4));
+    
+    // Goblin Assassin Sprite (Hidden by default)
+    const gobDBody = this.add.image(0, -28, 'char_goblin').setScale(1.92).setOrigin(0.5, 0.95).setVisible(false);
+    gobDContainer.add(gobDBody);
+
+    // Body & Gear
+    const gobDBodyTrunk = this.add.rectangle(0, -10, 18, 14, 0x3f6212).setStrokeStyle(1.5, 0x65a30d, 1);
+    const gobDDaggerL = this.add.triangle(-12, -12, 0, -6, -2.5, 6, 2.5, 6, 0x94a3b8).setAngle(-25).setStrokeStyle(1, 0xef4444, 1);
+    const gobDDaggerR = this.add.triangle(12, -12, 0, -6, -2.5, 6, 2.5, 6, 0x94a3b8).setAngle(25).setStrokeStyle(1, 0xef4444, 1);
+    gobDContainer.add(gobDBodyTrunk);
+    gobDContainer.add(gobDDaggerL);
+    gobDContainer.add(gobDDaggerR);
+
+    // Goblin ears
+    const gobDEarL = this.add.triangle(-20, -28, 0, 0, 8, -5, 5, 7, 0x4d7c0f).setAngle(-45);
+    const gobDEarR = this.add.triangle(20, -28, 0, 0, -8, -5, -5, 7, 0x4d7c0f).setAngle(45);
+    gobDContainer.add(gobDEarL);
+    gobDContainer.add(gobDEarR);
+
     const gobDEmblem = this.add.circle(0, -28, 22, 0x451a03).setStrokeStyle(2.5, 0xf97316, 1);
     const gobDText = this.add.text(0, -28, '👤', { fontSize: '24px', fontFamily: 'Segoe UI Emoji, Arial' }).setOrigin(0.5);
     gobDContainer.add(gobDEmblem);
@@ -686,6 +891,8 @@ export class GameScene extends Phaser.Scene {
       hasAttackedThisTurn: false,
       bodyEmblem: gobDEmblem,
       bodyText: gobDText,
+      bodySprite: gobDBody,
+      bodyParts: [gobDBodyTrunk, gobDDaggerL, gobDDaggerR, gobDEarL, gobDEarR],
       direction: 'NW',
       dirGraphics: gobDDirGraphics,
       skinType: 'gob_assassin'
@@ -696,6 +903,23 @@ export class GameScene extends Phaser.Scene {
     // 5. Goblin Defender E (Olive Green - Shield Tanker)
     const gobEContainer = this.add.container(0, 0);
     gobEContainer.add(this.add.ellipse(0, 0, 52, 26, 0x000000, 0.4));
+    
+    // Goblin Defender Sprite (Hidden by default)
+    const gobEBody = this.add.image(0, -28, 'char_goblin_boss').setScale(1.92).setOrigin(0.5, 0.95).setVisible(false);
+    gobEContainer.add(gobEBody);
+
+    // Body & Gear
+    const gobEBodyTrunk = this.add.rectangle(0, -10, 22, 16, 0x14532d).setStrokeStyle(1.5, 0x65a30d, 1);
+    const gobEShield = this.add.circle(-18, -14, 9, 0x475569).setStrokeStyle(1.5, 0xffffff, 1);
+    gobEContainer.add(gobEBodyTrunk);
+    gobEContainer.add(gobEShield);
+
+    // Goblin Shaman/Defender Horn style feathers
+    const gobEFeatherL = this.add.triangle(-6, -46, 0, 14, -3, 0, 3, 0, 0xdc2626).setAngle(-15);
+    const gobEFeatherR = this.add.triangle(6, -46, 0, 14, -3, 0, 3, 0, 0xdc2626).setAngle(15);
+    gobEContainer.add(gobEFeatherL);
+    gobEContainer.add(gobEFeatherR);
+
     const gobEEmblem = this.add.circle(0, -28, 22, 0x14532d).setStrokeStyle(2.5, 0xf97316, 1);
     const gobEText = this.add.text(0, -28, '🛡️', { fontSize: '24px', fontFamily: 'Segoe UI Emoji, Arial' }).setOrigin(0.5);
     gobEContainer.add(gobEEmblem);
@@ -724,6 +948,8 @@ export class GameScene extends Phaser.Scene {
       hasAttackedThisTurn: false,
       bodyEmblem: gobEEmblem,
       bodyText: gobEText,
+      bodySprite: gobEBody,
+      bodyParts: [gobEBodyTrunk, gobEShield, gobEFeatherL, gobEFeatherR],
       direction: 'NW',
       dirGraphics: gobEDirGraphics,
       skinType: 'gob_defender'
@@ -743,8 +969,9 @@ export class GameScene extends Phaser.Scene {
       char.gameObject.add(hudG);
       char.hudBarGraphics = hudG;
 
-      // Draw high-res human character pixel sprite
-      this.drawPixelArt(char.bodyText, char.skinType, char.direction);
+      // Initial visual synchronization
+      this.drawPixelArt(char);
+      this.updateCharacterVisualMode(char);
     });
 
     this.updateCharacterPositions();
@@ -796,7 +1023,7 @@ export class GameScene extends Phaser.Scene {
     char.dirGraphics.strokeCircle(targetX, targetY, 4.5);
 
     // Redraw pixel art on orientation change (to support correct mirroring/flip)
-    this.drawPixelArt(char.bodyText, char.skinType, char.direction);
+    this.drawPixelArt(char);
   }
 
   private updateCharacterPositions() {
@@ -1409,6 +1636,21 @@ export class GameScene extends Phaser.Scene {
         });
       }
     });
+
+    const btnAvatar = document.getElementById('btn-avatar-toggle');
+    if (btnAvatar) {
+      btnAvatar.textContent = '표시';
+      btnAvatar.addEventListener('click', () => {
+        this.toggleAvatarMode();
+        if (this.showHeadAvatar) {
+          btnAvatar.textContent = '표시';
+          btnAvatar.classList.add('active');
+        } else {
+          btnAvatar.textContent = '숨김';
+          btnAvatar.classList.remove('active');
+        }
+      });
+    }
   }
 
   private showHoverHUD(char: Character) {
