@@ -20,7 +20,8 @@ interface Character {
   maxAttackRange: number;
   hasMovedThisTurn: boolean;
   hasAttackedThisTurn: boolean;
-  bodySprite: Phaser.GameObjects.Image;
+  bodyText: Phaser.GameObjects.Text;
+  bodyEmblem: Phaser.GameObjects.Arc;
   direction: 'NE' | 'SE' | 'SW' | 'NW';
   dirGraphics: Phaser.GameObjects.Graphics;
   hudBarGraphics?: Phaser.GameObjects.Graphics;
@@ -90,6 +91,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   create() {
+    this.sys.textures.get('char_warrior').setFilter(Phaser.Textures.FilterMode.NEAREST);
+    this.sys.textures.get('char_mage').setFilter(Phaser.Textures.FilterMode.NEAREST);
+    this.sys.textures.get('char_archer').setFilter(Phaser.Textures.FilterMode.NEAREST);
+    this.sys.textures.get('char_goblin').setFilter(Phaser.Textures.FilterMode.NEAREST);
+    this.sys.textures.get('char_goblin_boss').setFilter(Phaser.Textures.FilterMode.NEAREST);
+
     this.turnManager = new TurnManager();
     this.isGameOver = false;
     this.characters = [];
@@ -138,12 +145,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawPixelArt(
-    bodySprite: Phaser.GameObjects.Image,
+    _bodyText: Phaser.GameObjects.Text,
     _skinKey: string,
-    direction: 'NE' | 'SE' | 'SW' | 'NW' = 'SE'
+    _direction: 'NE' | 'SE' | 'SW' | 'NW' = 'SE'
   ) {
-    const isMirror = (direction === 'SE' || direction === 'SW');
-    bodySprite.setFlipX(isMirror);
+    // Emojis shouldn't be mirrored
   }
 
   update() {
@@ -344,8 +350,10 @@ export class GameScene extends Phaser.Scene {
     // 1. Leon (Warrior / Indigo - Melee)
     const leonContainer = this.add.container(0, 0);
     leonContainer.add(this.add.ellipse(0, 0, 48, 24, 0x000000, 0.4)); // shadow
-    const leonBody = this.add.image(0, -28, 'char_warrior').setScale(0.12).setOrigin(0.5, 0.95);
-    leonContainer.add(leonBody);
+    const leonEmblem = this.add.circle(0, -28, 22, 0x1e1b4b).setStrokeStyle(2.5, 0x38bdf8, 1);
+    const leonText = this.add.text(0, -28, '⚔️', { fontSize: '24px', fontFamily: 'Segoe UI Emoji, Arial' }).setOrigin(0.5);
+    leonContainer.add(leonEmblem);
+    leonContainer.add(leonText);
 
     const leonDirGraphics = this.add.graphics();
     leonContainer.add(leonDirGraphics);
@@ -368,7 +376,8 @@ export class GameScene extends Phaser.Scene {
       maxAttackRange: 1, // Melee
       hasMovedThisTurn: false,
       hasAttackedThisTurn: false,
-      bodySprite: leonBody,
+      bodyEmblem: leonEmblem,
+      bodyText: leonText,
       direction: 'SE',
       dirGraphics: leonDirGraphics,
       skinType: 'warrior'
@@ -379,8 +388,10 @@ export class GameScene extends Phaser.Scene {
     // 2. Aisha (Mage / Purple Magenta - Ranged)
     const aishaContainer = this.add.container(0, 0);
     aishaContainer.add(this.add.ellipse(0, 0, 44, 22, 0x000000, 0.4));
-    const aishaBody = this.add.image(0, -28, 'char_mage').setScale(0.12).setOrigin(0.5, 0.95);
-    aishaContainer.add(aishaBody);
+    const aishaEmblem = this.add.circle(0, -28, 22, 0x312e81).setStrokeStyle(2.5, 0x38bdf8, 1);
+    const aishaText = this.add.text(0, -28, '🔮', { fontSize: '24px', fontFamily: 'Segoe UI Emoji, Arial' }).setOrigin(0.5);
+    aishaContainer.add(aishaEmblem);
+    aishaContainer.add(aishaText);
 
     const aishaDirGraphics = this.add.graphics();
     aishaContainer.add(aishaDirGraphics);
@@ -403,7 +414,8 @@ export class GameScene extends Phaser.Scene {
       maxAttackRange: 3, // Ranged Mage
       hasMovedThisTurn: false,
       hasAttackedThisTurn: false,
-      bodySprite: aishaBody,
+      bodyEmblem: aishaEmblem,
+      bodyText: aishaText,
       direction: 'SE',
       dirGraphics: aishaDirGraphics,
       skinType: 'mage'
@@ -414,8 +426,10 @@ export class GameScene extends Phaser.Scene {
     // 3. Roy (Archer / Teal - Long Range)
     const royContainer = this.add.container(0, 0);
     royContainer.add(this.add.ellipse(0, 0, 44, 22, 0x000000, 0.4));
-    const royBody = this.add.image(0, -28, 'char_archer').setScale(0.12).setOrigin(0.5, 0.95);
-    royContainer.add(royBody);
+    const royEmblem = this.add.circle(0, -28, 22, 0x064e3b).setStrokeStyle(2.5, 0x38bdf8, 1);
+    const royText = this.add.text(0, -28, '🏹', { fontSize: '24px', fontFamily: 'Segoe UI Emoji, Arial' }).setOrigin(0.5);
+    royContainer.add(royEmblem);
+    royContainer.add(royText);
 
     const royDirGraphics = this.add.graphics();
     royContainer.add(royDirGraphics);
@@ -438,7 +452,8 @@ export class GameScene extends Phaser.Scene {
       maxAttackRange: 5, // Long Ranged Archer
       hasMovedThisTurn: false,
       hasAttackedThisTurn: false,
-      bodySprite: royBody,
+      bodyEmblem: royEmblem,
+      bodyText: royText,
       direction: 'SE',
       dirGraphics: royDirGraphics,
       skinType: 'archer'
@@ -449,8 +464,10 @@ export class GameScene extends Phaser.Scene {
     // 4. Ren (Cleric / Green - Support)
     const renContainer = this.add.container(0, 0);
     renContainer.add(this.add.ellipse(0, 0, 44, 22, 0x000000, 0.4));
-    const renBody = this.add.image(0, -28, 'char_mage').setScale(0.12).setOrigin(0.5, 0.95);
-    renContainer.add(renBody);
+    const renEmblem = this.add.circle(0, -28, 22, 0x065f46).setStrokeStyle(2.5, 0x38bdf8, 1);
+    const renText = this.add.text(0, -28, '💚', { fontSize: '24px', fontFamily: 'Segoe UI Emoji, Arial' }).setOrigin(0.5);
+    renContainer.add(renEmblem);
+    renContainer.add(renText);
 
     const renDirGraphics = this.add.graphics();
     renContainer.add(renDirGraphics);
@@ -473,7 +490,8 @@ export class GameScene extends Phaser.Scene {
       maxAttackRange: 2, // Cleric Spell range
       hasMovedThisTurn: false,
       hasAttackedThisTurn: false,
-      bodySprite: renBody,
+      bodyEmblem: renEmblem,
+      bodyText: renText,
       direction: 'SE',
       dirGraphics: renDirGraphics,
       skinType: 'cleric'
@@ -484,8 +502,10 @@ export class GameScene extends Phaser.Scene {
     // 5. Kyle (Rogue / Dark Slate - Assassin)
     const kyleContainer = this.add.container(0, 0);
     kyleContainer.add(this.add.ellipse(0, 0, 46, 23, 0x000000, 0.4));
-    const kyleBody = this.add.image(0, -28, 'char_warrior').setScale(0.12).setOrigin(0.5, 0.95);
-    kyleContainer.add(kyleBody);
+    const kyleEmblem = this.add.circle(0, -28, 22, 0x111827).setStrokeStyle(2.5, 0x38bdf8, 1);
+    const kyleText = this.add.text(0, -28, '🗡️', { fontSize: '24px', fontFamily: 'Segoe UI Emoji, Arial' }).setOrigin(0.5);
+    kyleContainer.add(kyleEmblem);
+    kyleContainer.add(kyleText);
 
     const kyleDirGraphics = this.add.graphics();
     kyleContainer.add(kyleDirGraphics);
@@ -508,7 +528,8 @@ export class GameScene extends Phaser.Scene {
       maxAttackRange: 1, // Dagger Melee
       hasMovedThisTurn: false,
       hasAttackedThisTurn: false,
-      bodySprite: kyleBody,
+      bodyEmblem: kyleEmblem,
+      bodyText: kyleText,
       direction: 'SE',
       dirGraphics: kyleDirGraphics,
       skinType: 'rogue'
@@ -523,8 +544,10 @@ export class GameScene extends Phaser.Scene {
     // 1. Goblin Warrior A (Red - Melee)
     const gobAContainer = this.add.container(0, 0);
     gobAContainer.add(this.add.ellipse(0, 0, 48, 24, 0x000000, 0.4));
-    const gobABody = this.add.image(0, -28, 'char_goblin').setScale(0.12).setOrigin(0.5, 0.95);
-    gobAContainer.add(gobABody);
+    const gobAEmblem = this.add.circle(0, -28, 22, 0x450a0a).setStrokeStyle(2.5, 0xf97316, 1);
+    const gobAText = this.add.text(0, -28, '👹', { fontSize: '24px', fontFamily: 'Segoe UI Emoji, Arial' }).setOrigin(0.5);
+    gobAContainer.add(gobAEmblem);
+    gobAContainer.add(gobAText);
 
     const gobADirGraphics = this.add.graphics();
     gobAContainer.add(gobADirGraphics);
@@ -547,7 +570,8 @@ export class GameScene extends Phaser.Scene {
       maxAttackRange: 1,
       hasMovedThisTurn: false,
       hasAttackedThisTurn: false,
-      bodySprite: gobABody,
+      bodyEmblem: gobAEmblem,
+      bodyText: gobAText,
       direction: 'NW',
       dirGraphics: gobADirGraphics,
       skinType: 'gob_warrior'
@@ -558,8 +582,10 @@ export class GameScene extends Phaser.Scene {
     // 2. Goblin Archer B (Orange - Ranged)
     const gobBContainer = this.add.container(0, 0);
     gobBContainer.add(this.add.ellipse(0, 0, 44, 22, 0x000000, 0.4));
-    const gobBBody = this.add.image(0, -28, 'char_goblin').setScale(0.12).setOrigin(0.5, 0.95);
-    gobBContainer.add(gobBBody);
+    const gobBEmblem = this.add.circle(0, -28, 22, 0x7c2d12).setStrokeStyle(2.5, 0xf97316, 1);
+    const gobBText = this.add.text(0, -28, '🏹', { fontSize: '24px', fontFamily: 'Segoe UI Emoji, Arial' }).setOrigin(0.5);
+    gobBContainer.add(gobBEmblem);
+    gobBContainer.add(gobBText);
 
     const gobBDirGraphics = this.add.graphics();
     gobBContainer.add(gobBDirGraphics);
@@ -582,7 +608,8 @@ export class GameScene extends Phaser.Scene {
       maxAttackRange: 4,
       hasMovedThisTurn: false,
       hasAttackedThisTurn: false,
-      bodySprite: gobBBody,
+      bodyEmblem: gobBEmblem,
+      bodyText: gobBText,
       direction: 'NW',
       dirGraphics: gobBDirGraphics,
       skinType: 'gob_archer'
@@ -593,8 +620,10 @@ export class GameScene extends Phaser.Scene {
     // 3. Goblin Shaman C (Crimson - Shaman Mage)
     const gobCContainer = this.add.container(0, 0);
     gobCContainer.add(this.add.ellipse(0, 0, 44, 22, 0x000000, 0.4));
-    const gobCBody = this.add.image(0, -28, 'char_goblin_boss').setScale(0.12).setOrigin(0.5, 0.95);
-    gobCContainer.add(gobCBody);
+    const gobCEmblem = this.add.circle(0, -28, 22, 0x881337).setStrokeStyle(2.5, 0xf97316, 1);
+    const gobCText = this.add.text(0, -28, '🧙‍♂️', { fontSize: '24px', fontFamily: 'Segoe UI Emoji, Arial' }).setOrigin(0.5);
+    gobCContainer.add(gobCEmblem);
+    gobCContainer.add(gobCText);
 
     const gobCDirGraphics = this.add.graphics();
     gobCContainer.add(gobCDirGraphics);
@@ -617,7 +646,8 @@ export class GameScene extends Phaser.Scene {
       maxAttackRange: 3,
       hasMovedThisTurn: false,
       hasAttackedThisTurn: false,
-      bodySprite: gobCBody,
+      bodyEmblem: gobCEmblem,
+      bodyText: gobCText,
       direction: 'NW',
       dirGraphics: gobCDirGraphics,
       skinType: 'gob_shaman'
@@ -628,8 +658,10 @@ export class GameScene extends Phaser.Scene {
     // 4. Goblin Assassin D (Dark Brown - Rogue Raider)
     const gobDContainer = this.add.container(0, 0);
     gobDContainer.add(this.add.ellipse(0, 0, 44, 22, 0x000000, 0.4));
-    const gobDBody = this.add.image(0, -28, 'char_goblin').setScale(0.12).setOrigin(0.5, 0.95);
-    gobDContainer.add(gobDBody);
+    const gobDEmblem = this.add.circle(0, -28, 22, 0x451a03).setStrokeStyle(2.5, 0xf97316, 1);
+    const gobDText = this.add.text(0, -28, '👤', { fontSize: '24px', fontFamily: 'Segoe UI Emoji, Arial' }).setOrigin(0.5);
+    gobDContainer.add(gobDEmblem);
+    gobDContainer.add(gobDText);
 
     const gobDDirGraphics = this.add.graphics();
     gobDContainer.add(gobDDirGraphics);
@@ -652,7 +684,8 @@ export class GameScene extends Phaser.Scene {
       maxAttackRange: 1,
       hasMovedThisTurn: false,
       hasAttackedThisTurn: false,
-      bodySprite: gobDBody,
+      bodyEmblem: gobDEmblem,
+      bodyText: gobDText,
       direction: 'NW',
       dirGraphics: gobDDirGraphics,
       skinType: 'gob_assassin'
@@ -663,8 +696,10 @@ export class GameScene extends Phaser.Scene {
     // 5. Goblin Defender E (Olive Green - Shield Tanker)
     const gobEContainer = this.add.container(0, 0);
     gobEContainer.add(this.add.ellipse(0, 0, 52, 26, 0x000000, 0.4));
-    const gobEBody = this.add.image(0, -28, 'char_goblin_boss').setScale(0.12).setOrigin(0.5, 0.95);
-    gobEContainer.add(gobEBody);
+    const gobEEmblem = this.add.circle(0, -28, 22, 0x14532d).setStrokeStyle(2.5, 0xf97316, 1);
+    const gobEText = this.add.text(0, -28, '🛡️', { fontSize: '24px', fontFamily: 'Segoe UI Emoji, Arial' }).setOrigin(0.5);
+    gobEContainer.add(gobEEmblem);
+    gobEContainer.add(gobEText);
 
     const gobEDirGraphics = this.add.graphics();
     gobEContainer.add(gobEDirGraphics);
@@ -687,7 +722,8 @@ export class GameScene extends Phaser.Scene {
       maxAttackRange: 1,
       hasMovedThisTurn: false,
       hasAttackedThisTurn: false,
-      bodySprite: gobEBody,
+      bodyEmblem: gobEEmblem,
+      bodyText: gobEText,
       direction: 'NW',
       dirGraphics: gobEDirGraphics,
       skinType: 'gob_defender'
@@ -708,7 +744,7 @@ export class GameScene extends Phaser.Scene {
       char.hudBarGraphics = hudG;
 
       // Draw high-res human character pixel sprite
-      this.drawPixelArt(char.bodySprite, char.skinType, char.direction);
+      this.drawPixelArt(char.bodyText, char.skinType, char.direction);
     });
 
     this.updateCharacterPositions();
@@ -760,7 +796,7 @@ export class GameScene extends Phaser.Scene {
     char.dirGraphics.strokeCircle(targetX, targetY, 4.5);
 
     // Redraw pixel art on orientation change (to support correct mirroring/flip)
-    this.drawPixelArt(char.bodySprite, char.skinType, char.direction);
+    this.drawPixelArt(char.bodyText, char.skinType, char.direction);
   }
 
   private updateCharacterPositions() {
