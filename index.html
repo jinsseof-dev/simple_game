@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>simple_game</title>
+    <!-- Web Fonts for 2D Retro Game styling -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/DungGeunMo.css">
+    <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <div id="game-container"></div>
+    <div id="ui-layer">
+      <!-- Top Bar: Turn Status & Settings -->
+      <div id="top-bar-row">
+        <div id="turn-banner" class="glass-panel">
+          <div id="turn-label">PLAYER TURN</div>
+          <div id="turn-counter">TURN 1</div>
+          
+          <!-- Timer Area (Hidden when limit is None or during enemy turn) -->
+          <div id="timer-container" class="hidden">
+            <div id="timer-progress-bg">
+              <div id="timer-progress-fill" style="width: 100%;"></div>
+            </div>
+            <span id="timer-text">30s</span>
+          </div>
+        </div>
+
+        <div id="config-panel" class="glass-panel">
+          <span class="config-label">⏰ 제한 시간 :</span>
+          <button id="btn-limit-none" class="config-btn active">무제한</button>
+          <button id="btn-limit-10" class="config-btn">10초</button>
+          <button id="btn-limit-30" class="config-btn">30초</button>
+          <button id="btn-limit-60" class="config-btn">60초</button>
+        </div>
+      </div>
+
+      <!-- Hover HUD (Floating upper-center HUD) -->
+      <div id="hover-hud" class="glass-panel hidden">
+        <span id="hud-avatar">🤖</span>
+        <span id="hud-name">Name</span>
+        <div class="hud-stats">
+          <span class="hud-hp-label">HP</span>
+          <span id="hud-hp" class="hud-val">100/100</span>
+          <span class="hud-mp-label">MP</span>
+          <span id="hud-mp" class="hud-val">50/50</span>
+        </div>
+      </div>
+
+      <!-- Bottom Bar: Split into profile and actions -->
+      <div id="bottom-bar">
+        <!-- Character Stats Panel -->
+        <div id="char-panel" class="glass-panel hidden">
+          <div class="char-avatar" id="char-avatar">⚔️</div>
+          <div class="char-info">
+            <div id="char-name">Hero</div>
+            <div class="stat-bar">
+              <span>HP</span>
+              <div class="bar-bg"><div id="hp-bar" class="bar-fill hp" style="width: 100%;"></div></div>
+              <span id="hp-text" class="bar-val">100/100</span>
+            </div>
+            <div class="stat-bar">
+              <span>MP</span>
+              <div class="bar-bg"><div id="mp-bar" class="bar-fill mp" style="width: 100%;"></div></div>
+              <span id="mp-text" class="bar-val">50/50</span>
+            </div>
+            <div class="stat-bar">
+              <span>AP</span>
+              <div id="ap-gems" class="ap-gems-container"></div>
+              <span id="ap-text" class="bar-val">3/3</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Panel -->
+        <div id="action-panel" class="glass-panel">
+          <button id="btn-move" class="game-btn">이동 (Move)</button>
+          <button id="btn-turn" class="game-btn">방향 (Turn)</button>
+          <button id="btn-attack" class="game-btn" disabled>공격 (Attack)</button>
+          <button id="btn-wait" class="game-btn">대기 (Wait)</button>
+          <button id="btn-end-turn" class="game-btn highlight">턴 종료 (End Turn)</button>
+        </div>
+      </div>
+
+      <!-- Dialogue System (Optional overlay) -->
+      <div id="dialogue-box" class="glass-panel hidden">
+        <div class="dialogue-speaker">Leon</div>
+        <div class="dialogue-text">이곳이 전장인가... 적들이 오고 있군. 준비해라!</div>
+        <div class="dialogue-prompt">Click to continue...</div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
