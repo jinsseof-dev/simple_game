@@ -14,6 +14,9 @@
     <div id="ui-layer">
       <!-- Top Bar: Turn Status & Settings -->
       <div id="top-bar-row">
+        <div id="stage-banner" class="glass-panel" style="margin-right: auto; font-family: 'DungGeunMo', monospace; font-size: 14px; color: #facc15; text-shadow: 0 0 5px rgba(250, 204, 21, 0.4);">
+          <span id="stage-name-display">Stage 1</span>
+        </div>
         <div id="turn-banner" class="glass-panel">
           <div id="turn-label">PLAYER TURN</div>
           <div id="turn-counter">TURN 1</div>
@@ -28,13 +31,19 @@
         </div>
 
         <div id="config-panel" class="glass-panel">
-          <span class="config-label">⏰ 제한 시간 :</span>
-          <button id="btn-limit-none" class="config-btn active">무제한</button>
-          <button id="btn-limit-10" class="config-btn">10초</button>
-          <button id="btn-limit-30" class="config-btn">30초</button>
-          <button id="btn-limit-60" class="config-btn">60초</button>
+          <div style="display: none;">
+            <span class="config-label">⏰ 제한 시간 :</span>
+            <button id="btn-limit-none" class="config-btn active">무제한</button>
+            <button id="btn-limit-10" class="config-btn">10초</button>
+            <button id="btn-limit-30" class="config-btn">30초</button>
+            <button id="btn-limit-60" class="config-btn">60초</button>
+          </div>
           <span class="config-label" style="margin-left: 12px;">🏷️ 머리 아바타 :</span>
           <button id="btn-avatar-toggle" class="config-btn active">표시</button>
+          <span class="config-label" style="margin-left: 12px;">⚡ 배속 :</span>
+          <button id="btn-skip-toggle" class="config-btn">스킵</button>
+          <span class="config-label" style="margin-left: 12px;">🏆 치트 :</span>
+          <button id="btn-cheat-win" class="config-btn" style="color: #facc15; font-weight: bold;">즉시 승리</button>
         </div>
       </div>
 
@@ -80,6 +89,8 @@
           <button id="btn-move" class="game-btn">이동 (Move)</button>
           <button id="btn-turn" class="game-btn">방향 (Turn)</button>
           <button id="btn-attack" class="game-btn" disabled>공격 (Attack)</button>
+          <button id="btn-spell-1" class="game-btn" disabled>스킬 1 (Skill 1)</button>
+          <button id="btn-spell-2" class="game-btn" disabled>스킬 2 (Skill 2)</button>
           <button id="btn-wait" class="game-btn">대기 (Wait)</button>
           <button id="btn-end-turn" class="game-btn highlight">턴 종료 (End Turn)</button>
         </div>
@@ -90,6 +101,15 @@
         <div class="dialogue-speaker">Leon</div>
         <div class="dialogue-text">이곳이 전장인가... 적들이 오고 있군. 준비해라!</div>
         <div class="dialogue-prompt">Click to continue...</div>
+      </div>
+      
+      <!-- Stage Clear Overlay Modal -->
+      <div id="stage-clear-overlay" class="overlay-modal hidden">
+        <div class="modal-content glass-panel">
+          <h2 id="modal-title">STAGE CLEAR</h2>
+          <p id="modal-desc">Stage 1 클리어 완료!</p>
+          <button id="btn-next-stage" class="game-btn highlight" style="margin-top: 20px;">다음 스테이지로</button>
+        </div>
       </div>
     </div>
     <script type="module" src="/src/main.ts"></script>

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { findPath, type Point } from '../utils/pathfinding';
 import { TurnManager, type TurnState } from '../game/TurnManager';
+import { STAGE_PRESETS, type StageConfig } from '../game/StageConfig';
 
 interface Character {
   name: string;
@@ -24,10 +25,25 @@ interface Character {
   bodyEmblem: Phaser.GameObjects.Arc;
   bodySprite: Phaser.GameObjects.Image;
   bodyParts: Phaser.GameObjects.GameObject[];
+  glowRing: Phaser.GameObjects.Ellipse;
   direction: 'NE' | 'SE' | 'SW' | 'NW';
   dirGraphics: Phaser.GameObjects.Graphics;
   hudBarGraphics?: Phaser.GameObjects.Graphics;
   skinType: string;
+  spells: SpellConfig[];
+  burnTurns: number;
+  stunTurns: number;
+  poisonTurns: number;
+}
+
+interface SpellConfig {
+  name: string;
+  cost: number;
+  rangeMin: number;
+  rangeMax: number;
+  type: 'AoE' | 'Line' | 'Single';
+  effectType: 'damage' | 'heal' | 'buff';
+  debuffType?: 'burn' | 'stun' | 'poison';
 }
 
 
@@ -35,10 +51,27 @@ interface Character {
 export class GameScene extends Phaser.Scene {
   private turnManager!: TurnManager;
   private showHeadAvatar = true;
+  private pedestalStyle: 'standee' | 'chess' | 'hexagon' = 'hexagon';
+  private currentStageIndex = 0;
+  private mapObjects: Phaser.GameObjects.GameObject[] = [];
 
-  // Grid configuration
-  private gridWidth = 10;
-  private gridHeight = 10;
+  // Camera panning control variables
+  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+  private wasdKeys!: any;
+  private spaceKey!: Phaser.Input.Keyboard.Key;
+  private animationSpeedMultiplier = 1.0;
+  private cameraSpeed = 10;
+  private isDraggingCamera = false;
+  private dragStartX = 0;
+  private dragStartY = 0;
+  private tabKey!: Phaser.Input.Keyboard.Key;
+  private isDragModeActive = false;
+  private startPointerX = 0;
+  private startPointerY = 0;
+
+  // Grid configuration (dynamically set per stage)
+  private gridWidth = 8;
+  private gridHeight = 8;
   private halfTileWidth = 64;
   private halfTileHeight = 32;
 
@@ -48,6 +81,8 @@ export class GameScene extends Phaser.Scene {
 
   // Obstacle grid (All flat tiles now as requested)
   private obstacleGrid: boolean[][] = [];
+  private cliffGrid: boolean[][] = [];
+  private bridgeGrid: boolean[][] = [];
 
   // Rendering layers
   private tileMapGraphics!: Phaser.GameObjects.Graphics;
@@ -62,6 +97,8 @@ export class GameScene extends Phaser.Scene {
   private hoverTile: Point | null = null;
   private isMovementMode = false;
   private isAttackMode = false;
+  private isSpellMode = false;
+  private selectedSpellIndex = 0; // 0 = Skill 1, 1 = Skill 2
   private isGameOver = false;
 
   // Direction Selection Mode
@@ -107,31 +144,30 @@ export class GameScene extends Phaser.Scene {
     this.isDirectionSelectMode = false;
     this.isPostMoveDirectionSelect = false;
 
-    // Set initial origin points based on screen dimensions
-    this.updateOriginPoints();
-
-    // Initialize obstacle map (All flat now)
-    this.initObstacles();
+    // Bind Keyboard keys for Camera Pan controls
+    if (this.input && this.input.keyboard) {
+      this.cursors = this.input.keyboard.createCursorKeys();
+      this.wasdKeys = this.input.keyboard.addKeys({
+        W: Phaser.Input.Keyboard.KeyCodes.W,
+        A: Phaser.Input.Keyboard.KeyCodes.A,
+        S: Phaser.Input.Keyboard.KeyCodes.S,
+        D: Phaser.Input.Keyboard.KeyCodes.D
+      });
+      this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+      this.tabKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TAB);
+      this.input.keyboard.addCapture(Phaser.Input.Keyboard.KeyCodes.TAB);
+    }
 
     // Setup Graphics objects
     this.tileMapGraphics = this.add.graphics();
     this.interactiveGraphics = this.add.graphics();
     this.selectionRingGraphics = this.add.graphics();
 
-    // Render Static Map
-    this.renderStaticMap();
-
-    // Create Characters
-    this.createCharacters();
-
-    // Select first player character (Leon) by default
-    const firstPlayer = this.characters.find(c => !c.isEnemy);
-    if (firstPlayer) {
-      this.selectCharacter(firstPlayer);
-    }
-
     // Bind Turn Manager to UI
     this.setupTurnManagerEvents();
+
+    // Load Stage 1 as initial entry
+    this.loadStage(this.currentStageIndex);
 
     // Bind DOM UI Events
     this.bindDOMEvents();
@@ -145,13 +181,223 @@ export class GameScene extends Phaser.Scene {
     // Input Listeners
     this.input.on('pointermove', this.handlePointerMove, this);
     this.input.on('pointerdown', this.handlePointerDown, this);
+    this.input.on('pointerup', this.handlePointerUp, this);
   }
 
-  private drawPixelArt(
-    char: Character
-  ) {
-    const isMirror = (char.direction === 'SE' || char.direction === 'SW');
-    char.bodySprite.setFlipX(isMirror);
+  private drawPedestal(char: Character) {
+    const graphics = char.bodyParts[0] as Phaser.GameObjects.Graphics;
+    if (!graphics) return;
+    graphics.clear();
+
+    const isEnemy = char.isEnemy;
+    
+    // Faction Colors
+    const baseColor = isEnemy ? 0x7f1d1d : 0x1e3a8a; // Dark base (Crimson / Blue)
+    const topColor = isEnemy ? 0xdc2626 : 0x3b82f6;  // Bright top (Red / Blue)
+    const strokeColor = 0xffffff;
+    
+    const style = this.pedestalStyle;
+
+    if (style === 'standee') {
+      // --- 1. Standee Style (Low height: 8px) ---
+      graphics.fillStyle(baseColor, 1);
+      graphics.fillRect(-20, -8, 40, 8);
+      graphics.fillEllipse(0, 0, 40, 16);
+      graphics.fillStyle(topColor, 1);
+      graphics.fillEllipse(0, -8, 40, 16);
+      graphics.lineStyle(1.5, strokeColor, 0.85);
+      graphics.strokeEllipse(0, -8, 40, 16);
+
+      // Center card clip slot
+      const clipBaseColor = isEnemy ? 0x450a0a : 0x172554;
+      graphics.fillStyle(clipBaseColor, 1);
+      graphics.fillRect(-12, -12, 24, 4);
+      graphics.fillEllipse(0, -8, 24, 6);
+      graphics.fillEllipse(0, -12, 24, 6);
+      
+      // Black slot slit line where badge is standing
+      graphics.lineStyle(1.5, 0x111827, 1);
+      graphics.beginPath();
+      graphics.moveTo(-10, -12);
+      graphics.lineTo(10, -12);
+      graphics.strokePath();
+
+    } else if (style === 'chess') {
+      // --- 2. Chess Pedestal Style ---
+      // Tier 1: Wide Bottom
+      graphics.fillStyle(baseColor, 1);
+      graphics.fillRect(-22, -4, 44, 4);
+      graphics.fillEllipse(0, 0, 44, 16);
+      graphics.fillEllipse(0, -4, 44, 16);
+
+      // Tier 2: Narrow Neck (middle)
+      const midColor = isEnemy ? 0x991b1b : 0x2563eb;
+      graphics.fillStyle(midColor, 1);
+      graphics.fillRect(-12, -11, 24, 7);
+      graphics.fillEllipse(0, -4, 24, 8);
+      graphics.fillEllipse(0, -11, 24, 8);
+
+      // Tier 3: Rounded Top Plinth
+      graphics.fillStyle(topColor, 1);
+      graphics.fillEllipse(0, -14, 28, 12);
+      graphics.lineStyle(1.5, strokeColor, 0.85);
+      graphics.strokeEllipse(0, -14, 28, 12);
+
+    } else if (style === 'hexagon') {
+      // --- 3. Hexagonal Plinth Style ---
+      // Side 1: Bottom center-right wall
+      graphics.fillStyle(baseColor, 1);
+      graphics.beginPath();
+      graphics.moveTo(0, 4);
+      graphics.lineTo(18, -2);
+      graphics.lineTo(18, 6);
+      graphics.lineTo(0, 12);
+      graphics.closePath();
+      graphics.fillPath();
+
+      // Side 2: Bottom center-left wall
+      const wallLColor = isEnemy ? 0x991b1b : 0x1d4ed8;
+      graphics.fillStyle(wallLColor, 1);
+      graphics.beginPath();
+      graphics.moveTo(-18, -2);
+      graphics.lineTo(0, 4);
+      graphics.lineTo(0, 12);
+      graphics.lineTo(-18, 6);
+      graphics.closePath();
+      graphics.fillPath();
+      
+      // Top hex cap
+      graphics.fillStyle(topColor, 1);
+      graphics.beginPath();
+      graphics.moveTo(0, -16);
+      graphics.lineTo(18, -10);
+      graphics.lineTo(18, -2);
+      graphics.lineTo(0, 4);
+      graphics.lineTo(-18, -2);
+      graphics.lineTo(-18, -10);
+      graphics.closePath();
+      graphics.fillPath();
+
+      // Draw bezel outline
+      graphics.lineStyle(1.5, strokeColor, 0.85);
+      graphics.beginPath();
+      graphics.moveTo(0, -16);
+      graphics.lineTo(18, -10);
+      graphics.lineTo(18, -2);
+      graphics.lineTo(0, 4);
+      graphics.lineTo(-18, -2);
+      graphics.lineTo(-18, -10);
+      graphics.closePath();
+      graphics.strokePath();
+
+
+      // --- Base Hexagon drawings end here ---
+    }
+
+    // Status Debuff Visual Rings:
+    if (char.burnTurns > 0) {
+      // Burn: orange fire aura ring
+      graphics.lineStyle(2.0, 0xf97316, 0.75);
+      graphics.strokeEllipse(0, -6, 42, 21);
+      // Flame particles (small diagonal spur lines)
+      graphics.beginPath();
+      graphics.moveTo(-16, -16); graphics.lineTo(-20, -23);
+      graphics.moveTo(16, -16); graphics.lineTo(20, -23);
+      graphics.moveTo(-16, 4); graphics.lineTo(-20, 9);
+      graphics.moveTo(16, 4); graphics.lineTo(20, 9);
+      graphics.strokePath();
+    }
+
+    if (char.stunTurns > 0) {
+      // Stun: shocking cyan electric spark ring
+      graphics.lineStyle(2.2, 0x00f3ff, 0.9);
+      graphics.strokeEllipse(0, -6, 39, 19.5);
+      // Zigzag electricity crackles
+      graphics.beginPath();
+      graphics.moveTo(-12, -8);
+      graphics.lineTo(-6, -13);
+      graphics.lineTo(0, -6);
+      graphics.lineTo(6, -14);
+      graphics.lineTo(12, -8);
+      graphics.strokePath();
+    }
+
+    if (char.poisonTurns > 0) {
+      // Poison: acid green bubbling aura ring
+      graphics.lineStyle(2.0, 0x22c55e, 0.8);
+      graphics.strokeEllipse(0, -6, 44, 22);
+      // Small poison droplets
+      graphics.fillStyle(0x22c55e, 0.75);
+      graphics.fillCircle(-21, -12, 2.5);
+      graphics.fillCircle(21, -12, 2.5);
+      graphics.fillCircle(-10, 8, 2);
+      graphics.fillCircle(10, 8, 2);
+    }
+
+    // Embed beautiful neon compass directional ring at the bottom of all pedestals!
+    this.drawCompassIndicator(graphics, char);
+  }
+
+  private drawCompassIndicator(graphics: Phaser.GameObjects.Graphics, char: Character) {
+    const isEnemy = char.isEnemy;
+    const arrowColor = isEnemy ? 0xf97316 : 0x00ff88; // Neon Orange / Neon Mint
+    
+    // 1. Draw elegant compass dial guide ellipse around pedestal base
+    graphics.lineStyle(1.8, 0xffffff, 0.28);
+    graphics.strokeEllipse(0, -6, 36, 18);
+
+    // 2. Draw 4 directional guide dots and 1 sharp highlighted pointing wedge
+    const dirs = ['NE', 'SE', 'SW', 'NW'];
+    dirs.forEach(dir => {
+      if (char.direction === dir) {
+        graphics.fillStyle(arrowColor, 0.95);
+        graphics.lineStyle(1.0, 0xffffff, 0.85);
+        graphics.beginPath();
+        if (dir === 'NE') {
+          graphics.moveTo(25, -19); // Tip
+          graphics.lineTo(14, -18); // Left Wing
+          graphics.lineTo(20, -10); // Right Wing
+        } else if (dir === 'SE') {
+          graphics.moveTo(25, 7);   // Tip
+          graphics.lineTo(20, -2);  // Left Wing
+          graphics.lineTo(14, 6);   // Right Wing
+        } else if (dir === 'SW') {
+          graphics.moveTo(-25, 7);  // Tip
+          graphics.lineTo(-14, 6);  // Left Wing
+          graphics.lineTo(-20, -2); // Right Wing
+        } else if (dir === 'NW') {
+          graphics.moveTo(-25, -19); // Tip
+          graphics.lineTo(-20, -10); // Left Wing
+          graphics.lineTo(-14, -18); // Right Wing
+        }
+        graphics.closePath();
+        graphics.fillPath();
+        graphics.strokePath();
+      } else {
+        // Draw tiny inactive guide dots aligned to the isometric diagonal ellipse
+        graphics.fillStyle(0xffffff, 0.45);
+        if (dir === 'NE') graphics.fillPoint(25, -16, 2.5);
+        else if (dir === 'SE') graphics.fillPoint(25, 4, 2.5);
+        else if (dir === 'SW') graphics.fillPoint(-25, 4, 2.5);
+        else if (dir === 'NW') graphics.fillPoint(-25, -16, 2.5);
+      }
+    });
+  }
+
+  private drawPixelArt(char: Character) {
+    const isMirror = (char.direction === 'NW' || char.direction === 'SW');
+    
+    // Scale standard size: X-mirroring flips text/avatar rendering!
+    const baseScaleX = 1.0;
+    const baseScaleY = 1.0;
+    
+    if (char.bodyText) {
+      char.bodyText.setScale(isMirror ? -baseScaleX : baseScaleX, baseScaleY);
+    }
+    
+    if (char.bodySprite) {
+      char.bodySprite.setFlipX(isMirror);
+    }
   }
 
   private updateCharacterVisualMode(char: Character) {
@@ -183,19 +429,87 @@ export class GameScene extends Phaser.Scene {
   }
 
   update() {
+    // Speed multiplier state evaluation (Spacebar or UI fast toggle)
+    const btnSkip = document.getElementById('btn-skip-toggle');
+    const isUiSkipActive = btnSkip && btnSkip.classList.contains('active');
+    if (this.spaceKey && this.spaceKey.isDown) {
+      this.animationSpeedMultiplier = 0.08;
+    } else {
+      this.animationSpeedMultiplier = isUiSkipActive ? 0.05 : 1.0;
+    }
+
+    // 1. Camera Panning Controls (Keyboard)
+    const scrollSpeed = this.cameraSpeed;
+    if (this.cursors && this.wasdKeys) {
+      if (this.cursors.left.isDown || this.wasdKeys.A.isDown) {
+        this.cameras.main.scrollX -= scrollSpeed;
+      }
+      if (this.cursors.right.isDown || this.wasdKeys.D.isDown) {
+        this.cameras.main.scrollX += scrollSpeed;
+      }
+      if (this.cursors.up.isDown || this.wasdKeys.W.isDown) {
+        this.cameras.main.scrollY -= scrollSpeed;
+      }
+      if (this.cursors.down.isDown || this.wasdKeys.S.isDown) {
+        this.cameras.main.scrollY += scrollSpeed;
+      }
+    }
+
+
+
+    // 3. Clamp Camera Scroll within dynamic boundary bounds
+    const maxScrollX = 300 + (this.gridWidth - 8) * 45;
+    const maxScrollY = 250 + (this.gridHeight - 8) * 30;
+    this.cameras.main.scrollX = Phaser.Math.Clamp(this.cameras.main.scrollX, -maxScrollX, maxScrollX);
+    this.cameras.main.scrollY = Phaser.Math.Clamp(this.cameras.main.scrollY, -maxScrollY, maxScrollY);
+
+    // 4. Spacebar: Quick Focus on the selected character
+    if (this.spaceKey && Phaser.Input.Keyboard.JustDown(this.spaceKey) && this.selectedCharacter) {
+      const pos = this.gridToScreen(this.selectedCharacter.x, this.selectedCharacter.y);
+      this.cameras.main.pan(pos.x, pos.y - 30, 350, 'Power2');
+    }
+
+    // 5. Tab Key: Cycle selection through active player characters who have remaining actions
+    if (this.tabKey && Phaser.Input.Keyboard.JustDown(this.tabKey) && this.turnManager.getState() === 'PLAYER_TURN' && !this.isGameOver) {
+      const activeAllies = this.characters.filter(c => 
+        !c.isEnemy && 
+        c.hp > 0 && 
+        !(c.hasMovedThisTurn && c.hasAttackedThisTurn)
+      );
+
+      if (activeAllies.length > 0) {
+        let targetIdx = 0;
+        if (this.selectedCharacter) {
+          const currentIdx = activeAllies.indexOf(this.selectedCharacter);
+          if (currentIdx !== -1) {
+            targetIdx = (currentIdx + 1) % activeAllies.length;
+          }
+        }
+        const targetUnit = activeAllies[targetIdx];
+        this.selectCharacter(targetUnit);
+        
+        const pos = this.gridToScreen(targetUnit.x, targetUnit.y);
+        this.cameras.main.pan(pos.x, pos.y - 30, 300, 'Power2');
+      }
+    }
+
     // Clear and redraw highlights
     this.interactiveGraphics.clear();
     this.drawHoverHighlight();
     this.drawMovementRangeHighlight();
     this.drawAttackRangeHighlight();
+    this.drawSpellRangeHighlight();
     this.drawHoveredCharacterAttackRange();
-    this.drawDirectionSelectHighlight();
     this.drawSelectionRing();
   }
 
   private updateOriginPoints() {
     this.mapOriginX = this.cameras.main.width / 2;
-    this.mapOriginY = this.cameras.main.height / 3;
+    if (this.gridWidth >= 16) {
+      this.mapOriginY = this.cameras.main.height / 3.8;
+    } else {
+      this.mapOriginY = this.cameras.main.height / 3;
+    }
   }
 
   private handleResize(gameSize: Phaser.Structs.Size) {
@@ -205,20 +519,76 @@ export class GameScene extends Phaser.Scene {
     this.updateCharacterPositions();
   }
 
-  private initObstacles() {
+  private initProceduralMap() {
     this.obstacleGrid = [];
+    this.cliffGrid = [];
+    this.bridgeGrid = [];
+
+    // Initialize blank grids matching dynamic dimension
     for (let y = 0; y < this.gridHeight; y++) {
-      const row: boolean[] = [];
-      for (let x = 0; x < this.gridWidth; x++) {
-        row.push(false);
-      }
-      this.obstacleGrid.push(row);
+      this.obstacleGrid.push(Array(this.gridWidth).fill(false));
+      this.cliffGrid.push(Array(this.gridWidth).fill(false));
+      this.bridgeGrid.push(Array(this.gridWidth).fill(false));
     }
-    // Set static obstacles on specific tiles to demonstrate the SkinRegistry system
-    this.obstacleGrid[4][3] = true; // (x: 3, y: 4)
-    this.obstacleGrid[3][6] = true; // (x: 6, y: 3)
-    this.obstacleGrid[7][4] = true; // (x: 4, y: 7)
-    this.obstacleGrid[6][7] = true; // (x: 7, y: 6)
+
+    // Determine Geographical Theme based on current Stage index
+    const isCanyonTheme = (this.currentStageIndex % 2 === 0);
+
+    if (isCanyonTheme) {
+      // 1. Canyon Cliff & Bridge Theme
+      const cx = Math.floor(this.gridWidth / 2);
+      
+      // Carve vertical canyon cliff line
+      for (let y = 0; y < this.gridHeight; y++) {
+        this.cliffGrid[y][cx] = true;
+        // Occassionally carve width of 2 for nice staggered look
+        if (y % 4 !== 0 && cx + 1 < this.gridWidth) {
+          this.cliffGrid[y][cx + 1] = true;
+        }
+      }
+
+      // Span 2-tile wide tactical bridge across the middle
+      const cy = Math.floor(this.gridHeight / 2);
+      const bridgeRow1 = cy;
+      const bridgeRow2 = cy - 1;
+
+      for (let y = 0; y < this.gridHeight; y++) {
+        if (y === bridgeRow1 || y === bridgeRow2) {
+          this.cliffGrid[y][cx] = false;
+          this.bridgeGrid[y][cx] = true;
+          if (cx + 1 < this.gridWidth) {
+            this.cliffGrid[y][cx + 1] = false;
+            this.bridgeGrid[y][cx + 1] = true;
+          }
+        }
+      }
+
+      // Add a few minor barrels/crates near the bridge heads for tactical cover
+      const covers = [
+        { x: cx - 2, y: bridgeRow1 },
+        { x: cx - 2, y: bridgeRow2 },
+        { x: cx + 3, y: bridgeRow1 },
+        { x: cx + 3, y: bridgeRow2 }
+      ];
+      covers.forEach(c => {
+        if (c.x >= 0 && c.x < this.gridWidth && c.y >= 0 && c.y < this.gridHeight) {
+          this.obstacleGrid[c.y][c.x] = true;
+        }
+      });
+    } else {
+      // 2. Rocky Forest Theme (Open field with scattered obstacles)
+      for (let y = 1; y < this.gridHeight - 1; y++) {
+        for (let x = 1; x < this.gridWidth - 1; x++) {
+          // Avoid carving the spawn corners (Left-Bottom & Right-Top)
+          const isNearAllySpawn = (x < 4 && y >= this.gridHeight - 4);
+          const isNearEnemySpawn = (x >= this.gridWidth - 4 && y < 4);
+          
+          if (!isNearAllySpawn && !isNearEnemySpawn && Math.random() < 0.14) {
+            this.obstacleGrid[y][x] = true;
+          }
+        }
+      }
+    }
   }
 
   private getDynamicObstacleGrid(excludingChar: Character, targetChar?: Character): boolean[][] {
@@ -226,8 +596,9 @@ export class GameScene extends Phaser.Scene {
     for (let y = 0; y < this.gridHeight; y++) {
       const row: boolean[] = [];
       for (let x = 0; x < this.gridWidth; x++) {
-        // Copy static obstacles from base grid
-        row.push(this.obstacleGrid[y][x]);
+        // Impassable if static obstacle OR if it is a cliff that does not have a bridge on it
+        const isCliffWall = this.cliffGrid[y] && this.cliffGrid[y][x] && !(this.bridgeGrid[y] && this.bridgeGrid[y][x]);
+        row.push(this.obstacleGrid[y][x] || isCliffWall);
       }
       grid.push(row);
     }
@@ -263,64 +634,335 @@ export class GameScene extends Phaser.Scene {
 
   private renderStaticMap() {
     this.tileMapGraphics.clear();
+    const stage = STAGE_PRESETS[this.currentStageIndex];
+    const theme = stage.theme;
 
     // Draw tiles
     for (let y = 0; y < this.gridHeight; y++) {
       for (let x = 0; x < this.gridWidth; x++) {
         const screenPos = this.gridToScreen(x, y);
 
-        // Tile base colors checkerboard
+        // Subdued, premium tones matching paper tabletop boardgames
         let tileColor = 0x1e293b;
-        if ((x + y) % 2 === 0) {
-          tileColor = 0x1e293b;
-        } else {
-          tileColor = 0x0f172a;
+        if (theme === 'grass') {
+          tileColor = (x + y) % 2 === 0 ? 0x2e4a31 : 0x1f3622;
+        } else if (theme === 'desert') {
+          tileColor = (x + y) % 2 === 0 ? 0xd2b48c : 0xb39371;
+        } else if (theme === 'town') {
+          tileColor = (x + y) % 2 === 0 ? 0x854d0e : 0x713f12; // Terracotta clay colors
+        } else if (theme === 'dungeon') {
+          tileColor = (x + y) % 2 === 0 ? 0x384252 : 0x29313e;
         }
-        this.drawIsometricTile(this.tileMapGraphics, screenPos.x, screenPos.y, tileColor, true);
+        
+        const isCliff = this.cliffGrid[y] && this.cliffGrid[y][x];
+        const isBridge = this.bridgeGrid[y] && this.bridgeGrid[y][x];
+        
+        this.drawIsometricTile(this.tileMapGraphics, screenPos.x, screenPos.y, tileColor, true, theme, isCliff, isBridge);
 
-        // Revert to original: Draw static 3D gray obstacle cylinder
         if (this.obstacleGrid[y][x]) {
-          this.drawIsometricCylinder(this.tileMapGraphics, screenPos.x, screenPos.y);
+          this.drawIsometricObstacle(this.tileMapGraphics, screenPos.x, screenPos.y, theme);
         }
       }
     }
   }
 
-  private drawIsometricCylinder(graphics: Phaser.GameObjects.Graphics, isoX: number, isoY: number) {
-    const height = 46;
-    
-    // Shadow under cylinder
-    graphics.fillStyle(0x000000, 0.4);
-    graphics.fillEllipse(isoX, isoY, 48, 24);
-    
-    // Bottom Base cap
-    graphics.fillStyle(0x475569, 1);
-    graphics.fillEllipse(isoX, isoY, 32, 16);
-    
-    // Column Body
-    graphics.fillRect(isoX - 16, isoY - height, 32, height);
-    
-    // Top Cap
-    graphics.fillStyle(0x64748b, 1);
-    graphics.fillEllipse(isoX, isoY - height, 32, 16);
-    
-    // Outlines
-    graphics.lineStyle(1.8, 0x18181b, 1.0);
-    graphics.beginPath();
-    graphics.moveTo(isoX - 16, isoY - height);
-    graphics.lineTo(isoX - 16, isoY);
-    graphics.moveTo(isoX + 16, isoY - height);
-    graphics.lineTo(isoX + 16, isoY);
-    graphics.strokePath();
-    
-    graphics.beginPath();
-    graphics.arc(isoX, isoY, 16, 0, Math.PI, false);
-    graphics.strokePath();
+  private drawIsometricObstacle(graphics: Phaser.GameObjects.Graphics, isoX: number, isoY: number, theme: string) {
+    if (theme === 'grass') {
+      // --- 1. RUGGED BOULDER (자연 바위 더미) ---
+      // Ground Shadow
+      graphics.fillStyle(0x000000, 0.35);
+      graphics.fillEllipse(isoX, isoY + 4, 38, 18);
+      
+      // Face 1: Left light slope (slate gray)
+      graphics.fillStyle(0x94a3b8, 1);
+      graphics.beginPath();
+      graphics.moveTo(isoX, isoY - 32);
+      graphics.lineTo(isoX - 18, isoY - 10);
+      graphics.lineTo(isoX - 10, isoY + 2);
+      graphics.lineTo(isoX, isoY - 8);
+      graphics.closePath();
+      graphics.fillPath();
 
-    graphics.strokeEllipse(isoX, isoY - height, 32, 16);
+      // Face 2: Right dark slope (dark slate gray)
+      graphics.fillStyle(0x475569, 1);
+      graphics.beginPath();
+      graphics.moveTo(isoX, isoY - 32);
+      graphics.lineTo(isoX, isoY - 8);
+      graphics.lineTo(isoX + 12, isoY + 4);
+      graphics.lineTo(isoX + 18, isoY - 14);
+      graphics.closePath();
+      graphics.fillPath();
+
+      // Face 3: Lower ground shadowing rock foot
+      graphics.fillStyle(0x334155, 1);
+      graphics.beginPath();
+      graphics.moveTo(isoX - 10, isoY + 2);
+      graphics.lineTo(isoX, isoY - 8);
+      graphics.lineTo(isoX + 12, isoY + 4);
+      graphics.lineTo(isoX - 2, isoY + 8);
+      graphics.closePath();
+      graphics.fillPath();
+
+      // Bold Outlines
+      graphics.lineStyle(1.8, 0x0f172a, 1.0);
+      graphics.beginPath();
+      graphics.moveTo(isoX, isoY - 32);
+      graphics.lineTo(isoX - 18, isoY - 10);
+      graphics.lineTo(isoX - 10, isoY + 2);
+      graphics.lineTo(isoX - 2, isoY + 8);
+      graphics.lineTo(isoX + 12, isoY + 4);
+      graphics.lineTo(isoX + 18, isoY - 14);
+      graphics.closePath();
+      graphics.strokePath();
+
+      // Inner crease lines
+      graphics.beginPath();
+      graphics.moveTo(isoX, isoY - 32);
+      graphics.lineTo(isoX, isoY - 8);
+      graphics.moveTo(isoX - 10, isoY + 2);
+      graphics.lineTo(isoX, isoY - 8);
+      graphics.lineTo(isoX + 12, isoY + 4);
+      graphics.strokePath();
+
+    } else if (theme === 'desert') {
+      // --- 2. SANDSTONE ROCK & MINI CACTUS (사구 암석과 선인장) ---
+      // Ground Shadow
+      graphics.fillStyle(0x000000, 0.35);
+      graphics.fillEllipse(isoX, isoY + 4, 34, 16);
+
+      // Sandstone base
+      graphics.fillStyle(0xa16207, 1); // Dark gold ochre
+      graphics.beginPath();
+      graphics.moveTo(isoX - 15, isoY - 4);
+      graphics.lineTo(isoX, isoY - 26);
+      graphics.lineTo(isoX + 14, isoY - 12);
+      graphics.lineTo(isoX - 2, isoY + 6);
+      graphics.closePath();
+      graphics.fillPath();
+
+      // Sandstone highlight face
+      graphics.fillStyle(0xca8a04, 1); // Bright gold yellow
+      graphics.beginPath();
+      graphics.moveTo(isoX - 15, isoY - 4);
+      graphics.lineTo(isoX, isoY - 26);
+      graphics.lineTo(isoX - 2, isoY + 6);
+      graphics.closePath();
+      graphics.fillPath();
+
+      // Outlines for stone
+      graphics.lineStyle(1.8, 0x451a03, 1.0);
+      graphics.beginPath();
+      graphics.moveTo(isoX - 15, isoY - 4);
+      graphics.lineTo(isoX, isoY - 26);
+      graphics.lineTo(isoX + 14, isoY - 12);
+      graphics.lineTo(isoX - 2, isoY + 6);
+      graphics.closePath();
+      graphics.strokePath();
+
+      graphics.beginPath();
+      graphics.moveTo(isoX, isoY - 26);
+      graphics.lineTo(isoX - 2, isoY + 6);
+      graphics.strokePath();
+
+      // Cactus (Sprouting slightly to the left)
+      graphics.fillStyle(0x15803d, 1); // Cactus green
+      graphics.fillRect(isoX - 11, isoY - 33, 5, 23);
+      graphics.fillStyle(0x166534, 1); // Shaded side
+      graphics.fillRect(isoX - 8, isoY - 33, 2, 23);
+
+      // Branch
+      graphics.fillStyle(0x15803d, 1);
+      graphics.fillRect(isoX - 16, isoY - 26, 6, 3);
+      graphics.fillRect(isoX - 16, isoY - 30, 3, 5);
+
+      // Cactus Outlines
+      graphics.lineStyle(1.5, 0x052e16, 1.0);
+      graphics.strokeRect(isoX - 11, isoY - 33, 5, 23);
+      graphics.strokeRect(isoX - 16, isoY - 30, 3, 5);
+
+    } else if (theme === 'town') {
+      // --- 3. WOODEN OAK BARREL (마을 오크 나무통) ---
+      // Ground Shadow
+      graphics.fillStyle(0x000000, 0.35);
+      graphics.fillEllipse(isoX, isoY + 4, 30, 15);
+
+      // Oak Barrel Cylinder Base
+      graphics.fillStyle(0x78350f, 1); // Dark brown wood
+      graphics.fillRect(isoX - 12, isoY - 28, 24, 28);
+      
+      // Ellipse Top wood cap
+      graphics.fillStyle(0xa16207, 1); // Light warm wood
+      graphics.fillEllipse(isoX, isoY - 28, 24, 8);
+      graphics.fillEllipse(isoX, isoY, 24, 8);
+
+      // Iron Rings around barrel
+      graphics.fillStyle(0x334155, 1); // Iron slate gray
+      graphics.fillRect(isoX - 12.5, isoY - 20, 25, 3);
+      graphics.fillRect(isoX - 12.5, isoY - 8, 25, 3);
+
+      // Outer outline & shading details
+      graphics.lineStyle(1.8, 0x1c1917, 1.0);
+      graphics.beginPath();
+      // Outer side boundaries
+      graphics.moveTo(isoX - 12, isoY - 28);
+      graphics.lineTo(isoX - 12, isoY);
+      graphics.moveTo(isoX + 12, isoY - 28);
+      graphics.lineTo(isoX + 12, isoY);
+      graphics.strokePath();
+
+      graphics.strokeEllipse(isoX, isoY - 28, 24, 8);
+      // Bottom rim curve outline
+      graphics.beginPath();
+      graphics.arc(isoX, isoY, 12, 0, Math.PI, false);
+      graphics.strokePath();
+
+      // Vertical Wood Staves lines
+      graphics.lineStyle(0.8, 0x451a03, 0.6);
+      graphics.beginPath();
+      graphics.moveTo(isoX - 4, isoY - 26);
+      graphics.lineTo(isoX - 4, isoY + 2);
+      graphics.moveTo(isoX + 4, isoY - 26);
+      graphics.lineTo(isoX + 4, isoY + 2);
+      graphics.strokePath();
+    } else {
+      // --- 4. ANCIENT RUIN PILLAR (깨진 유적 석주) ---
+      // Ground Shadow
+      graphics.fillStyle(0x000000, 0.4);
+      graphics.fillEllipse(isoX, isoY + 2, 40, 20);
+
+      // Left Pillar Body (Muted Blue-Gray)
+      graphics.fillStyle(0x334155, 1);
+      graphics.beginPath();
+      graphics.moveTo(isoX - 12, isoY - 40);
+      graphics.lineTo(isoX - 2, isoY - 33);
+      graphics.lineTo(isoX - 2, isoY + 6);
+      graphics.lineTo(isoX - 12, isoY);
+      graphics.closePath();
+      graphics.fillPath();
+
+      // Right Pillar Body (Darker Slate Gray)
+      graphics.fillStyle(0x1e293b, 1);
+      graphics.beginPath();
+      graphics.moveTo(isoX - 2, isoY - 33);
+      graphics.lineTo(isoX + 12, isoY - 31);
+      graphics.lineTo(isoX + 12, isoY + 4);
+      graphics.lineTo(isoX - 2, isoY + 6);
+      graphics.closePath();
+      graphics.fillPath();
+
+      // Top Broken Diagonal Cap (Light Sand Stone color)
+      graphics.fillStyle(0x64748b, 1);
+      graphics.beginPath();
+      graphics.moveTo(isoX - 12, isoY - 40);
+      graphics.lineTo(isoX + 10, isoY - 37);
+      graphics.lineTo(isoX + 12, isoY - 31);
+      graphics.lineTo(isoX - 2, isoY - 33);
+      graphics.closePath();
+      graphics.fillPath();
+
+      // Outlines
+      graphics.lineStyle(1.8, 0x0f172a, 1.0);
+      graphics.beginPath();
+      graphics.moveTo(isoX - 12, isoY - 40);
+      graphics.lineTo(isoX - 12, isoY);
+      graphics.lineTo(isoX - 2, isoY + 6);
+      graphics.lineTo(isoX + 12, isoY + 4);
+      graphics.lineTo(isoX + 12, isoY - 31);
+      graphics.lineTo(isoX - 12, isoY - 40);
+      graphics.strokePath();
+
+      graphics.beginPath();
+      graphics.moveTo(isoX - 2, isoY - 33);
+      graphics.lineTo(isoX - 2, isoY + 6);
+      graphics.strokePath();
+
+      // Cracks in ruin stone
+      graphics.lineStyle(1.2, 0x090d16, 0.75);
+      graphics.beginPath();
+      graphics.moveTo(isoX - 6, isoY - 20);
+      graphics.lineTo(isoX - 9, isoY - 14);
+      graphics.lineTo(isoX - 5, isoY - 8);
+      graphics.strokePath();
+    }
   }
 
-  private drawIsometricTile(graphics: Phaser.GameObjects.Graphics, isoX: number, isoY: number, color: number, border: boolean) {
+  private drawIsometricTile(graphics: Phaser.GameObjects.Graphics, isoX: number, isoY: number, color: number, border: boolean, theme: string, isCliff = false, isBridge = false) {
+    if (isCliff && !isBridge) {
+      // --- A. 3D DEEP CANYON CLIFF (칠흑의 입체 낭떠러지) ---
+      // 1. Draw 3D Cliff Side Facet (Downwards depth extrusion)
+      graphics.fillStyle(0x06060e, 1.0);
+      graphics.beginPath();
+      graphics.moveTo(isoX - this.halfTileWidth, isoY);
+      graphics.lineTo(isoX, isoY + this.halfTileHeight);
+      graphics.lineTo(isoX + this.halfTileWidth, isoY);
+      graphics.lineTo(isoX + this.halfTileWidth, isoY + 28);
+      graphics.lineTo(isoX, isoY + this.halfTileHeight + 28);
+      graphics.lineTo(isoX - this.halfTileWidth, isoY + 28);
+      graphics.closePath();
+      graphics.fillPath();
+
+      // 2. Draw Top Flat Cliff Surface (Dark abyss tile)
+      graphics.fillStyle(0x0a0915, 1.0);
+      graphics.lineStyle(1.5, 0x5b21b6, 0.38); // Deep neon violet grid line
+
+      graphics.beginPath();
+      graphics.moveTo(isoX, isoY - this.halfTileHeight);
+      graphics.lineTo(isoX + this.halfTileWidth, isoY);
+      graphics.lineTo(isoX, isoY + this.halfTileHeight);
+      graphics.lineTo(isoX - this.halfTileWidth, isoY);
+      graphics.closePath();
+      
+      graphics.fillPath();
+      graphics.strokePath();
+      return; // Skip standard ground dithering for canyon abyss
+    }
+
+    if (isBridge) {
+      // --- B. TACTICAL WOOD PLANK BRIDGE (목재 다리) ---
+      // 1. Draw solid dark brown support base
+      graphics.fillStyle(0x3e2723, 1.0);
+      graphics.beginPath();
+      graphics.moveTo(isoX - this.halfTileWidth, isoY);
+      graphics.lineTo(isoX, isoY + this.halfTileHeight);
+      graphics.lineTo(isoX + this.halfTileWidth, isoY);
+      graphics.lineTo(isoX + this.halfTileWidth, isoY + 6);
+      graphics.lineTo(isoX, isoY + this.halfTileHeight + 6);
+      graphics.lineTo(isoX - this.halfTileWidth, isoY + 6);
+      graphics.closePath();
+      graphics.fillPath();
+
+      // 2. Draw bridge top surface planks
+      graphics.fillStyle(0x5c4033, 1.0);
+      graphics.lineStyle(1.8, 0xd97706, 0.7); // Bright amber borders
+
+      graphics.beginPath();
+      graphics.moveTo(isoX, isoY - this.halfTileHeight);
+      graphics.lineTo(isoX + this.halfTileWidth, isoY);
+      graphics.lineTo(isoX, isoY + this.halfTileHeight);
+      graphics.lineTo(isoX - this.halfTileWidth, isoY);
+      graphics.closePath();
+      graphics.fillPath();
+      graphics.strokePath();
+
+      // 3. Draw rustic wood plank dividers (lines running NE-SW)
+      graphics.lineStyle(1.5, 0x2a1b15, 0.65);
+      graphics.beginPath();
+      
+      // Parallel plank lines
+      graphics.moveTo(isoX - this.halfTileWidth / 2, isoY - this.halfTileHeight / 2);
+      graphics.lineTo(isoX + this.halfTileWidth / 2, isoY + this.halfTileHeight / 2);
+      
+      graphics.moveTo(isoX - this.halfTileWidth / 4, isoY - this.halfTileHeight / 4);
+      graphics.lineTo(isoX + this.halfTileWidth * 0.75, isoY + this.halfTileHeight * 0.75);
+
+      graphics.moveTo(isoX - this.halfTileWidth * 0.75, isoY - this.halfTileHeight * 0.75);
+      graphics.lineTo(isoX + this.halfTileWidth / 4, isoY + this.halfTileHeight / 4);
+      
+      graphics.strokePath();
+      return; // Skip ground dithering for bridges
+    }
+
+    // --- C. STANDARD GROUND TILE ---
     graphics.fillStyle(color, 1);
     graphics.lineStyle(1.5, 0xffffff, 0.08);
 
@@ -336,640 +978,381 @@ export class GameScene extends Phaser.Scene {
       graphics.strokePath();
     }
 
-    // 16-bit Dithering / Pixel Art texture overlay
+    // 16-bit Dithering / Texture Overlay based on theme
     const stepY = 4;
     const stepX = 4;
-    
-    // Extract RGB channels
     const r = (color >> 16) & 0xff;
     const g = (color >> 8) & 0xff;
     const b = color & 0xff;
 
-    // Seeded random-like texture based on tile coordinates to keep it static
     const seed = Math.sin(isoX * 12.9898 + isoY * 78.233) * 43758.5453;
     let randIdx = Math.abs(Math.floor(seed)) % 100;
 
+    // A. Draw Theme-specific textures (Grass blades / Sand ripples / Cobblestone lines)
+    if (theme === 'dungeon') {
+      // Cobblestone grout divider lines (4-split brick)
+      graphics.lineStyle(1.2, 0x1e293b, 0.4);
+      graphics.beginPath();
+      graphics.moveTo(isoX, isoY - this.halfTileHeight);
+      graphics.lineTo(isoX, isoY + this.halfTileHeight);
+      graphics.moveTo(isoX - this.halfTileWidth, isoY);
+      graphics.lineTo(isoX + this.halfTileWidth, isoY);
+      graphics.strokePath();
+    } else if (theme === 'grass') {
+      // Grass weeds randomly spread
+      if (randIdx % 7 === 0) {
+        graphics.fillStyle(0x0f172a, 0.25);
+        graphics.fillRect(isoX + (randIdx % 20) - 10, isoY + (randIdx % 10) - 5, 2, 4);
+      }
+    } else if (theme === 'desert') {
+      // Desert sand wind waves
+      if (randIdx % 9 === 0) {
+        graphics.lineStyle(1.2, 0x7c2d12, 0.15);
+        graphics.beginPath();
+        graphics.moveTo(isoX - 10, isoY + (randIdx % 6) - 3);
+        graphics.lineTo(isoX + 10, isoY + (randIdx % 6) - 1);
+        graphics.strokePath();
+      }
+    } else if (theme === 'town') {
+      // Clay Brick Pavement textures (horizontal overlay brick cuts)
+      graphics.lineStyle(1.2, 0x451a03, 0.4);
+      graphics.beginPath();
+      graphics.moveTo(isoX - 25, isoY - 6);
+      graphics.lineTo(isoX + 25, isoY - 6);
+      graphics.moveTo(isoX - 25, isoY + 6);
+      graphics.lineTo(isoX + 25, isoY + 6);
+      graphics.moveTo(isoX - 10, isoY - 6);
+      graphics.lineTo(isoX - 10, isoY + 6);
+      graphics.moveTo(isoX + 10, isoY - 6);
+      graphics.lineTo(isoX + 10, isoY + 6);
+      graphics.strokePath();
+    }
+
+    // B. General pixel texture noise
     for (let dy = -this.halfTileHeight + 2; dy < this.halfTileHeight - 2; dy += stepY) {
-      // Calculate isometric diamond bounds at current dy height
       const tRatio = 1 - Math.abs(dy) / this.halfTileHeight;
       const xRange = Math.floor(this.halfTileWidth * tRatio) - 2;
 
       for (let dx = -xRange; dx < xRange; dx += stepX) {
         randIdx = (randIdx * 33 + 17) % 100;
         
-        if (randIdx > 75) {
-          // Darken pixel dot
-          const shadowColor = (Math.max(0, r - 12) << 16) | (Math.max(0, g - 12) << 8) | Math.max(0, b - 12);
-          graphics.fillStyle(shadowColor, 0.65);
-          graphics.fillRect(isoX + dx, isoY + dy, stepX, stepY);
-        } else if (randIdx < 15) {
-          // Lighten pixel dot (grass blade tip / sand specular)
-          const highlightColor = (Math.min(255, r + 15) << 16) | (Math.min(255, g + 15) << 8) | Math.min(255, b + 15);
-          graphics.fillStyle(highlightColor, 0.45);
-          graphics.fillRect(isoX + dx, isoY + dy, stepX, stepY);
+        if (randIdx > 78) {
+          const shadowColor = (Math.max(0, r - 10) << 16) | (Math.max(0, g - 10) << 8) | Math.max(0, b - 10);
+          graphics.fillStyle(shadowColor, 0.4);
+          graphics.fillRect(isoX + dx, isoY + dy, 2, 2);
+        } else if (randIdx < 12) {
+          const highlightColor = (Math.min(255, r + 12) << 16) | (Math.min(255, g + 12) << 8) | Math.min(255, b + 12);
+          graphics.fillStyle(highlightColor, 0.3);
+          graphics.fillRect(isoX + dx, isoY + dy, 2, 2);
         }
       }
     }
   }
 
-  private createCharacters() {
-    // -------------------------------------------------------------
-    // ALLIES (Player Side) - 5 Characters
-    // -------------------------------------------------------------
+  private loadStage(stageIndex: number) {
+    this.currentStageIndex = stageIndex;
+    const stage = STAGE_PRESETS[stageIndex];
+    if (!stage) return;
 
-    // 1. Leon (Warrior / Indigo - Melee)
-    const leonContainer = this.add.container(0, 0);
-    leonContainer.add(this.add.ellipse(0, 0, 48, 24, 0x000000, 0.4)); // shadow
+    // Reset camera scroll position and compute adaptive zoom
+    this.cameras.main.setScroll(0, 0);
+    let zoom = 1.0;
+    if (stage.width >= 16) {
+      zoom = 0.74;
+    } else if (stage.width >= 12) {
+      zoom = 0.86;
+    } else if (stage.width >= 10) {
+      zoom = 0.94;
+    }
+    this.cameras.main.setZoom(zoom);
+
+    // 1. Clean up existing objects
+    this.characters.forEach(c => {
+      if (c.gameObject) c.gameObject.destroy();
+    });
+    this.characters = [];
+    this.selectedCharacter = null;
+    if (this.selectionIndicator) {
+      this.selectionIndicator.destroy();
+      this.selectionIndicator = null;
+    }
+    this.mapObjects.forEach(obj => obj.destroy());
+    this.mapObjects = [];
+
+    // 2. Set grid configuration dynamically based on stage index
+    this.gridWidth = 10 + (this.currentStageIndex % 3) * 3;
+    this.gridHeight = this.gridWidth;
+    this.updateOriginPoints();
+
+    // 3. Init procedural map layouts (Canyon cliffs, Bridges, Rocky forests)
+    this.initProceduralMap();
+
+    // 4. Render map
+    this.renderStaticMap();
+
+    // 5. Load units
+    this.createCharactersFromPreset(stage);
+
+    // 6. Reset turn manager and UI
+    this.turnManager.reset();
     
-    // Warrior Sprite (Hidden by default)
-    const leonBody = this.add.image(0, -28, 'char_warrior').setScale(1.92).setOrigin(0.5, 0.95).setVisible(false);
-    leonContainer.add(leonBody);
+    // Update Stage display HUD
+    let chapterStr = "";
+    if (stageIndex <= 2) {
+      chapterStr = `Chapter 1-${stageIndex + 1} [숲]`;
+    } else if (stageIndex <= 5) {
+      chapterStr = `Chapter 2-${stageIndex - 2} [사막]`;
+    } else if (stageIndex <= 8) {
+      chapterStr = `Chapter 3-${stageIndex - 5} [마을]`;
+    } else {
+      chapterStr = `Chapter 4-1 [보스전]`;
+    }
 
-    // Body & Gear
-    const leonBodyTrunk = this.add.rectangle(0, -10, 24, 16, 0x1e1b4b).setStrokeStyle(1.5, 0x38bdf8, 1);
-    const leonShield = this.add.circle(-18, -14, 10, 0xfacc15).setStrokeStyle(1.5, 0xffffff, 1);
-    const leonSword = this.add.rectangle(18, -14, 6, 20, 0x94a3b8).setAngle(20).setStrokeStyle(1, 0xffffff, 1);
-    const leonHilt = this.add.rectangle(18, -4, 10, 3, 0x78350f).setAngle(20);
-    leonContainer.add(leonBodyTrunk);
-    leonContainer.add(leonShield);
-    leonContainer.add(leonSword);
-    leonContainer.add(leonHilt);
+    const stageNameDisplay = document.getElementById('stage-name-display');
+    if (stageNameDisplay) {
+      stageNameDisplay.innerText = `${chapterStr} : ${stage.name}`;
+    }
 
-    // Warrior Horns
-    const leonHornL = this.add.triangle(-15, -42, 0, 8, -6, -4, 10, 8, 0xfacc15).setAngle(-25);
-    const leonHornR = this.add.triangle(15, -42, 0, 8, 6, -4, -10, 8, 0xfacc15).setAngle(25);
-    leonContainer.add(leonHornL);
-    leonContainer.add(leonHornR);
+    // Hide clear overlay if visible
+    const clearOverlay = document.getElementById('stage-clear-overlay');
+    if (clearOverlay) {
+      clearOverlay.classList.add('hidden');
+    }
 
-    const leonEmblem = this.add.circle(0, -28, 22, 0x1e1b4b).setStrokeStyle(2.5, 0x38bdf8, 1);
-    const leonText = this.add.text(0, -28, '⚔️', { fontSize: '24px', fontFamily: 'Segoe UI Emoji, Arial' }).setOrigin(0.5);
-    leonContainer.add(leonEmblem);
-    leonContainer.add(leonText);
+    // Select first living ally unit
+    const firstPlayer = this.characters.find(c => !c.isEnemy);
+    if (firstPlayer) {
+      this.selectCharacter(firstPlayer);
+    }
+  }
 
-    const leonDirGraphics = this.add.graphics();
-    leonContainer.add(leonDirGraphics);
-
-    const leon: Character = {
-      name: '레온 (Leon)',
-      x: 1,
-      y: 1,
-      hp: 100,
-      maxHp: 100,
-      mp: 50,
-      maxMp: 50,
-      ap: 3,
-      maxAp: 3,
-      avatar: '⚔️',
-      isEnemy: false,
-      gameObject: leonContainer,
-      moveRange: 4,
-      minAttackRange: 1,
-      maxAttackRange: 1, // Melee
-      hasMovedThisTurn: false,
-      hasAttackedThisTurn: false,
-      bodyEmblem: leonEmblem,
-      bodyText: leonText,
-      bodySprite: leonBody,
-      bodyParts: [leonBodyTrunk, leonShield, leonSword, leonHilt, leonHornL, leonHornR],
-      direction: 'SE',
-      dirGraphics: leonDirGraphics,
-      skinType: 'warrior'
+  private createCharactersFromPreset(stage: StageConfig) {
+    const UNIT_SPECS: Record<string, {
+      avatar: string;
+      maxHp: number;
+      maxMp: number;
+      maxAp: number;
+      moveRange: number;
+      minAttackRange: number;
+      maxAttackRange: number;
+      spriteKey: string;
+      scale: number;
+      baseColor: number;
+      topColor: number;
+      isEnemy: boolean;
+      spells: SpellConfig[];
+    }> = {
+      warrior: {
+        avatar: '⚔️', maxHp: 100, maxMp: 5, maxAp: 3, moveRange: 4, minAttackRange: 1, maxAttackRange: 1, spriteKey: 'char_warrior', scale: 1.92, baseColor: 0x1e3a8a, topColor: 0x3b82f6, isEnemy: false,
+        spells: [
+          { name: '썬더 슬래시', cost: 2, rangeMin: 1, rangeMax: 2, type: 'Single', effectType: 'damage', debuffType: 'stun' },
+          { name: '피닉스 다이브', cost: 3, rangeMin: 1, rangeMax: 3, type: 'AoE', effectType: 'damage', debuffType: 'burn' }
+        ]
+      },
+      mage: {
+        avatar: '🔮', maxHp: 75, maxMp: 5, maxAp: 3, moveRange: 3, minAttackRange: 2, maxAttackRange: 4, spriteKey: 'char_mage', scale: 1.92, baseColor: 0x4c1d95, topColor: 0x8b5cf6, isEnemy: false,
+        spells: [
+          { name: '파이어 스톰', cost: 3, rangeMin: 2, rangeMax: 4, type: 'AoE', effectType: 'damage', debuffType: 'burn' },
+          { name: '프로스트 레이', cost: 2, rangeMin: 2, rangeMax: 4, type: 'Line', effectType: 'damage', debuffType: 'stun' }
+        ]
+      },
+      archer: {
+        avatar: '🏹', maxHp: 80, maxMp: 5, maxAp: 3, moveRange: 4, minAttackRange: 3, maxAttackRange: 5, spriteKey: 'char_archer', scale: 1.92, baseColor: 0x064e3b, topColor: 0x10b981, isEnemy: false,
+        spells: [
+          { name: '윈드 피어스', cost: 2, rangeMin: 3, rangeMax: 5, type: 'Line', effectType: 'damage' },
+          { name: '샤이닝 에로우', cost: 3, rangeMin: 3, rangeMax: 5, type: 'Single', effectType: 'damage', debuffType: 'stun' }
+        ]
+      },
+      cleric: {
+        avatar: '💚', maxHp: 85, maxMp: 5, maxAp: 3, moveRange: 3, minAttackRange: 1, maxAttackRange: 2, spriteKey: 'char_mage', scale: 1.92, baseColor: 0x065f46, topColor: 0x34d399, isEnemy: false,
+        spells: [
+          { name: '홀리 하트', cost: 2, rangeMin: 1, rangeMax: 3, type: 'Single', effectType: 'heal' },
+          { name: '그레이스 에어', cost: 3, rangeMin: 1, rangeMax: 3, type: 'AoE', effectType: 'heal' }
+        ]
+      },
+      rogue: {
+        avatar: '🗡️', maxHp: 90, maxMp: 5, maxAp: 3, moveRange: 5, minAttackRange: 1, maxAttackRange: 1, spriteKey: 'char_warrior', scale: 1.92, baseColor: 0x111827, topColor: 0x4b5563, isEnemy: false,
+        spells: [
+          { name: '섀도우 스텝', cost: 2, rangeMin: 1, rangeMax: 2, type: 'Single', effectType: 'damage' },
+          { name: '포이즌 대거', cost: 2, rangeMin: 1, rangeMax: 2, type: 'Single', effectType: 'damage', debuffType: 'poison' }
+        ]
+      },
+      gob_warrior: {
+        avatar: '👹', maxHp: 60, maxMp: 5, maxAp: 3, moveRange: 3, minAttackRange: 1, maxAttackRange: 1, spriteKey: 'char_goblin', scale: 1.92, baseColor: 0x7f1d1d, topColor: 0xdc2626, isEnemy: true,
+        spells: [
+          { name: '휠윈드 슬래시', cost: 2, rangeMin: 1, rangeMax: 1, type: 'AoE', effectType: 'damage' },
+          { name: '격노의 도끼', cost: 2, rangeMin: 1, rangeMax: 1, type: 'Single', effectType: 'damage', debuffType: 'burn' }
+        ]
+      },
+      gob_archer: {
+        avatar: '🏹', maxHp: 50, maxMp: 5, maxAp: 3, moveRange: 3, minAttackRange: 2, maxAttackRange: 4, spriteKey: 'char_goblin', scale: 1.92, baseColor: 0x7c2d12, topColor: 0xea580c, isEnemy: true,
+        spells: [
+          { name: '포이즌 에로우', cost: 2, rangeMin: 2, rangeMax: 4, type: 'Single', effectType: 'damage', debuffType: 'poison' },
+          { name: '더블 샷', cost: 2, rangeMin: 2, rangeMax: 4, type: 'Single', effectType: 'damage' }
+        ]
+      },
+      gob_shaman: {
+        avatar: '🧙‍♂️', maxHp: 55, maxMp: 5, maxAp: 3, moveRange: 3, minAttackRange: 2, maxAttackRange: 3, spriteKey: 'char_goblin_boss', scale: 1.92, baseColor: 0x881337, topColor: 0xf43f5e, isEnemy: true,
+        spells: [
+          { name: '다크 스피어', cost: 3, rangeMin: 2, rangeMax: 3, type: 'AoE', effectType: 'damage', debuffType: 'stun' },
+          { name: '커스 오브 파이어', cost: 2, rangeMin: 2, rangeMax: 3, type: 'Single', effectType: 'damage', debuffType: 'burn' }
+        ]
+      },
+      gob_assassin: {
+        avatar: '👤', maxHp: 50, maxMp: 5, maxAp: 3, moveRange: 4, minAttackRange: 1, maxAttackRange: 1, spriteKey: 'char_goblin', scale: 1.92, baseColor: 0x451a03, topColor: 0xa16207, isEnemy: true,
+        spells: [
+          { name: '기습', cost: 2, rangeMin: 1, rangeMax: 2, type: 'Single', effectType: 'damage' },
+          { name: '독침', cost: 2, rangeMin: 1, rangeMax: 2, type: 'Single', effectType: 'damage', debuffType: 'poison' }
+        ]
+      },
+      gob_defender: {
+        avatar: '🛡️', maxHp: 85, maxMp: 5, maxAp: 3, moveRange: 2, minAttackRange: 1, maxAttackRange: 1, spriteKey: 'char_goblin_boss', scale: 1.92, baseColor: 0x14532d, topColor: 0x22c55e, isEnemy: true,
+        spells: [
+          { name: '그라운드 퀘이크', cost: 2, rangeMin: 1, rangeMax: 2, type: 'Single', effectType: 'damage', debuffType: 'stun' },
+          { name: '고블린 블러드', cost: 2, rangeMin: 1, rangeMax: 1, type: 'Single', effectType: 'heal' }
+        ]
+      }
     };
-    this.updateDirectionVisual(leon);
-    this.characters.push(leon);
 
-    // 2. Aisha (Mage / Purple Magenta - Ranged)
-    const aishaContainer = this.add.container(0, 0);
-    aishaContainer.add(this.add.ellipse(0, 0, 44, 22, 0x000000, 0.4));
-    
-    // Mage Sprite (Hidden by default)
-    const aishaBody = this.add.image(0, -28, 'char_mage').setScale(1.92).setOrigin(0.5, 0.95).setVisible(false);
-    aishaContainer.add(aishaBody);
+    const spawnPresets = [...stage.allies, ...stage.enemies];
 
-    // Body & Gear
-    const aishaBodyTrunk = this.add.triangle(0, -8, 0, -18, -13, 2, 13, 2, 0x701a75).setStrokeStyle(1.5, 0xd946ef, 1);
-    const aishaStaff = this.add.rectangle(16, -18, 4, 28, 0xd97706);
-    const aishaOrb = this.add.circle(16, -33, 6, 0x38bdf8).setStrokeStyle(1.5, 0xffffff, 1);
-    aishaContainer.add(aishaBodyTrunk);
-    aishaContainer.add(aishaStaff);
-    aishaContainer.add(aishaOrb);
+    spawnPresets.forEach(preset => {
+      const spec = UNIT_SPECS[preset.type];
+      if (!spec) return;
 
-    // Wizard Hat Top
-    const aishaHat = this.add.triangle(0, -50, 0, 0, -10, 16, 10, 16, 0x701a75).setStrokeStyle(1.5, 0xd946ef, 1);
-    aishaContainer.add(aishaHat);
+      let spawnX = preset.x;
+      let spawnY = preset.y;
 
-    const aishaEmblem = this.add.circle(0, -28, 22, 0x312e81).setStrokeStyle(2.5, 0x38bdf8, 1);
-    const aishaText = this.add.text(0, -28, '🔮', { fontSize: '24px', fontFamily: 'Segoe UI Emoji, Arial' }).setOrigin(0.5);
-    aishaContainer.add(aishaEmblem);
-    aishaContainer.add(aishaText);
+      const isValidSpawn = (x: number, y: number) => {
+        if (x < 0 || x >= this.gridWidth || y < 0 || y >= this.gridHeight) return false;
+        if (this.cliffGrid[y][x] && !(this.bridgeGrid[y] && this.bridgeGrid[y][x])) return false;
+        if (this.obstacleGrid[y][x]) return false;
+        const isOccupied = this.characters.some(c => c.x === x && c.y === y && c.hp > 0);
+        return !isOccupied;
+      };
 
-    const aishaDirGraphics = this.add.graphics();
-    aishaContainer.add(aishaDirGraphics);
+      if (!isValidSpawn(spawnX, spawnY)) {
+        let found = false;
+        if (!spec.isEnemy) {
+          for (let y = this.gridHeight - 1; y >= this.gridHeight - 6; y--) {
+            for (let x = 0; x < 6; x++) {
+              if (isValidSpawn(x, y)) {
+                spawnX = x;
+                spawnY = y;
+                found = true;
+                break;
+              }
+            }
+            if (found) break;
+          }
+        } else {
+          for (let y = 0; y < 6; y++) {
+            for (let x = this.gridWidth - 1; x >= this.gridWidth - 6; x--) {
+              if (isValidSpawn(x, y)) {
+                spawnX = x;
+                spawnY = y;
+                found = true;
+                break;
+              }
+            }
+            if (found) break;
+          }
+        }
+      }
 
-    const aisha: Character = {
-      name: '에이샤 (Aisha)',
-      x: 1,
-      y: 2,
-      hp: 75,
-      maxHp: 75,
-      mp: 120,
-      maxMp: 120,
-      ap: 3,
-      maxAp: 3,
-      avatar: '🔮',
-      isEnemy: false,
-      gameObject: aishaContainer,
-      moveRange: 3,
-      minAttackRange: 2,
-      maxAttackRange: 3, // Ranged Mage
-      hasMovedThisTurn: false,
-      hasAttackedThisTurn: false,
-      bodyEmblem: aishaEmblem,
-      bodyText: aishaText,
-      bodySprite: aishaBody,
-      bodyParts: [aishaBodyTrunk, aishaStaff, aishaOrb, aishaHat],
-      direction: 'SE',
-      dirGraphics: aishaDirGraphics,
-      skinType: 'mage'
-    };
-    this.updateDirectionVisual(aisha);
-    this.characters.push(aisha);
+      const container = this.add.container(0, 0);
+      container.add(this.add.ellipse(0, 0, 48, 24, 0x000000, 0.4)); // shadow
 
-    // 3. Roy (Archer / Teal - Long Range)
-    const royContainer = this.add.container(0, 0);
-    royContainer.add(this.add.ellipse(0, 0, 44, 22, 0x000000, 0.4));
-    
-    // Archer Sprite (Hidden by default)
-    const royBody = this.add.image(0, -28, 'char_archer').setScale(1.92).setOrigin(0.5, 0.95).setVisible(false);
-    royContainer.add(royBody);
+      // Glow Ring
+      const ringColor = spec.isEnemy ? 0xf97316 : 0x38bdf8;
+      const glow = this.add.ellipse(0, 0, spec.isEnemy ? 68 : 72, spec.isEnemy ? 34 : 36, ringColor, 0.7).setVisible(false);
+      this.tweens.add({
+        targets: glow,
+        alpha: 0.08,
+        scaleX: 1.35,
+        scaleY: 1.35,
+        duration: 900,
+        yoyo: true,
+        repeat: -1
+      });
+      container.add(glow);
 
-    // Body & Gear
-    const royBodyTrunk = this.add.rectangle(0, -10, 20, 16, 0x064e3b).setStrokeStyle(1.5, 0x34d399, 1);
-    const royBow = this.add.triangle(-16, -16, 0, -10, -5, 12, 5, 12, 0x78350f).setAngle(-15).setStrokeStyle(1, 0xfacc15, 1);
-    royContainer.add(royBodyTrunk);
-    royContainer.add(royBow);
+      // Body Sprite
+      const sprite = this.add.image(0, -28, spec.spriteKey).setScale(spec.scale).setOrigin(0.5, 0.95).setVisible(false);
+      container.add(sprite);
 
-    // Archer feather decoration
-    const royFeather = this.add.triangle(15, -42, 0, 10, -4, 0, 6, 0, 0x10b981).setAngle(35);
-    royContainer.add(royFeather);
+      // Pedestal Stand
+      const pillar = this.add.graphics();
+      container.add(pillar);
 
-    const royEmblem = this.add.circle(0, -28, 22, 0x064e3b).setStrokeStyle(2.5, 0x38bdf8, 1);
-    const royText = this.add.text(0, -28, '🏹', { fontSize: '24px', fontFamily: 'Segoe UI Emoji, Arial' }).setOrigin(0.5);
-    royContainer.add(royEmblem);
-    royContainer.add(royText);
+      // Head Emblem / Emoji Text
+      const emblemStrokeColor = spec.isEnemy ? 0xf97316 : 0x38bdf8;
+      const emblemBg = spec.isEnemy ? 0x450a0a : 0x1e1b4b;
+      const emblem = this.add.circle(0, -24, 20, emblemBg).setStrokeStyle(2.5, emblemStrokeColor, 1);
+      const text = this.add.text(0, -24, spec.avatar, { fontSize: '20px', fontFamily: 'Segoe UI Emoji, Arial' }).setOrigin(0.5);
+      container.add(emblem);
+      container.add(text);
 
-    const royDirGraphics = this.add.graphics();
-    royContainer.add(royDirGraphics);
+      const dirGraphics = this.add.graphics();
+      container.add(dirGraphics);
 
-    const roy: Character = {
-      name: '로이 (Roy)',
-      x: 2,
-      y: 1,
-      hp: 80,
-      maxHp: 80,
-      mp: 40,
-      maxMp: 40,
-      ap: 3,
-      maxAp: 3,
-      avatar: '🏹',
-      isEnemy: false,
-      gameObject: royContainer,
-      moveRange: 4,
-      minAttackRange: 3,
-      maxAttackRange: 5, // Long Ranged Archer
-      hasMovedThisTurn: false,
-      hasAttackedThisTurn: false,
-      bodyEmblem: royEmblem,
-      bodyText: royText,
-      bodySprite: royBody,
-      bodyParts: [royBodyTrunk, royBow, royFeather],
-      direction: 'SE',
-      dirGraphics: royDirGraphics,
-      skinType: 'archer'
-    };
-    this.updateDirectionVisual(roy);
-    this.characters.push(roy);
+      // Calculate stage difficulty multiplier for enemies
+      let difficultyMultiplier = 1.0;
+      if (spec.isEnemy) {
+        const chapterNum = Math.floor(this.currentStageIndex / 3) + 1;
+        const stageNumWithinChapter = (this.currentStageIndex % 3) + 1;
+        difficultyMultiplier = 1.0 + (chapterNum - 1) * 0.25 + (stageNumWithinChapter - 1) * 0.15;
+      }
 
-    // 4. Ren (Cleric / Green - Support)
-    const renContainer = this.add.container(0, 0);
-    renContainer.add(this.add.ellipse(0, 0, 44, 22, 0x000000, 0.4));
-    
-    // Cleric Sprite (Hidden by default)
-    const renBody = this.add.image(0, -28, 'char_mage').setScale(1.92).setOrigin(0.5, 0.95).setVisible(false);
-    renContainer.add(renBody);
+      const finalMaxHp = spec.isEnemy ? Math.floor(spec.maxHp * difficultyMultiplier) : spec.maxHp;
 
-    // Body & Gear
-    const renBodyTrunk = this.add.rectangle(0, -10, 22, 16, 0x1f2937).setStrokeStyle(1.5, 0xffffff, 1);
-    const renBible = this.add.rectangle(0, -8, 14, 10, 0xfef08a).setStrokeStyle(1, 0x78350f, 1);
-    renContainer.add(renBodyTrunk);
-    renContainer.add(renBible);
+      const char: Character = {
+        name: preset.name,
+        x: spawnX,
+        y: spawnY,
+        hp: finalMaxHp,
+        maxHp: finalMaxHp,
+        mp: 0,
+        maxMp: spec.maxMp,
+        ap: spec.maxAp,
+        maxAp: spec.maxAp,
+        avatar: spec.avatar,
+        isEnemy: spec.isEnemy,
+        gameObject: container,
+        moveRange: spec.moveRange,
+        minAttackRange: spec.minAttackRange,
+        maxAttackRange: spec.maxAttackRange,
+        hasMovedThisTurn: false,
+        hasAttackedThisTurn: false,
+        bodyEmblem: emblem,
+        bodyText: text,
+        bodySprite: sprite,
+        bodyParts: [pillar],
+        glowRing: glow,
+        direction: spec.isEnemy ? 'SE' : 'NW',
+        dirGraphics: dirGraphics,
+        skinType: preset.type,
+        spells: spec.spells,
+        burnTurns: 0,
+        stunTurns: 0,
+        poisonTurns: 0
+      };
 
-    // Holy Halo Ring
-    const renHalo = this.add.ellipse(0, -46, 26, 8).setStrokeStyle(2, 0xfacc15, 0.85);
-    renContainer.add(renHalo);
+      this.drawPedestal(char);
+      this.updateDirectionVisual(char);
+      this.characters.push(char);
+    });
 
-    const renEmblem = this.add.circle(0, -28, 22, 0x065f46).setStrokeStyle(2.5, 0x38bdf8, 1);
-    const renText = this.add.text(0, -28, '💚', { fontSize: '24px', fontFamily: 'Segoe UI Emoji, Arial' }).setOrigin(0.5);
-    renContainer.add(renEmblem);
-    renContainer.add(renText);
-
-    const renDirGraphics = this.add.graphics();
-    renContainer.add(renDirGraphics);
-
-    const ren: Character = {
-      name: '렌 (Ren)',
-      x: 2,
-      y: 2,
-      hp: 85,
-      maxHp: 85,
-      mp: 100,
-      maxMp: 100,
-      ap: 3,
-      maxAp: 3,
-      avatar: '💚',
-      isEnemy: false,
-      gameObject: renContainer,
-      moveRange: 3,
-      minAttackRange: 1,
-      maxAttackRange: 2, // Cleric Spell range
-      hasMovedThisTurn: false,
-      hasAttackedThisTurn: false,
-      bodyEmblem: renEmblem,
-      bodyText: renText,
-      bodySprite: renBody,
-      bodyParts: [renBodyTrunk, renBible, renHalo],
-      direction: 'SE',
-      dirGraphics: renDirGraphics,
-      skinType: 'cleric'
-    };
-    this.updateDirectionVisual(ren);
-    this.characters.push(ren);
-
-    // 5. Kyle (Rogue / Dark Slate - Assassin)
-    const kyleContainer = this.add.container(0, 0);
-    kyleContainer.add(this.add.ellipse(0, 0, 46, 23, 0x000000, 0.4));
-    
-    // Rogue Sprite (Hidden by default)
-    const kyleBody = this.add.image(0, -28, 'char_warrior').setScale(1.92).setOrigin(0.5, 0.95).setVisible(false);
-    kyleContainer.add(kyleBody);
-
-    // Body & Gear
-    const kyleBodyTrunk = this.add.rectangle(0, -10, 20, 16, 0x1f2937).setStrokeStyle(1.5, 0x4b5563, 1);
-    const kyleDaggerL = this.add.triangle(-14, -14, 0, -8, -3, 8, 3, 8, 0x94a3b8).setAngle(-25).setStrokeStyle(1, 0xef4444, 1);
-    const kyleDaggerR = this.add.triangle(14, -14, 0, -8, -3, 8, 3, 8, 0x94a3b8).setAngle(25).setStrokeStyle(1, 0xef4444, 1);
-    kyleContainer.add(kyleBodyTrunk);
-    kyleContainer.add(kyleDaggerL);
-    kyleContainer.add(kyleDaggerR);
-
-    // Rogue Bandana tail
-    const kyleBandana = this.add.triangle(-15, -20, 0, 4, 10, 0, 4, -10, 0xdc2626).setAngle(-30);
-    kyleContainer.add(kyleBandana);
-
-    const kyleEmblem = this.add.circle(0, -28, 22, 0x111827).setStrokeStyle(2.5, 0x38bdf8, 1);
-    const kyleText = this.add.text(0, -28, '🗡️', { fontSize: '24px', fontFamily: 'Segoe UI Emoji, Arial' }).setOrigin(0.5);
-    kyleContainer.add(kyleEmblem);
-    kyleContainer.add(kyleText);
-
-    const kyleDirGraphics = this.add.graphics();
-    kyleContainer.add(kyleDirGraphics);
-
-    const kyle: Character = {
-      name: '카일 (Kyle)',
-      x: 1,
-      y: 3,
-      hp: 90,
-      maxHp: 90,
-      mp: 60,
-      maxMp: 60,
-      ap: 3,
-      maxAp: 3,
-      avatar: '🗡️',
-      isEnemy: false,
-      gameObject: kyleContainer,
-      moveRange: 5,
-      minAttackRange: 1,
-      maxAttackRange: 1, // Dagger Melee
-      hasMovedThisTurn: false,
-      hasAttackedThisTurn: false,
-      bodyEmblem: kyleEmblem,
-      bodyText: kyleText,
-      bodySprite: kyleBody,
-      bodyParts: [kyleBodyTrunk, kyleDaggerL, kyleDaggerR, kyleBandana],
-      direction: 'SE',
-      dirGraphics: kyleDirGraphics,
-      skinType: 'rogue'
-    };
-    this.updateDirectionVisual(kyle);
-    this.characters.push(kyle);
-
-    // -------------------------------------------------------------
-    // ENEMIES (Goblin Side) - 5 Characters
-    // -------------------------------------------------------------
-
-    // 1. Goblin Warrior A (Red - Melee)
-    const gobAContainer = this.add.container(0, 0);
-    gobAContainer.add(this.add.ellipse(0, 0, 48, 24, 0x000000, 0.4));
-    
-    // Goblin Sprite (Hidden by default)
-    const gobABody = this.add.image(0, -28, 'char_goblin').setScale(1.92).setOrigin(0.5, 0.95).setVisible(false);
-    gobAContainer.add(gobABody);
-
-    // Body & Gear
-    const gobABodyTrunk = this.add.rectangle(0, -10, 18, 14, 0x3f6212).setStrokeStyle(1.5, 0x65a30d, 1);
-    const gobADagger = this.add.triangle(14, -12, 0, -6, -3, 6, 3, 6, 0x475569).setAngle(15).setStrokeStyle(1, 0xfee2e2, 1);
-    gobAContainer.add(gobABodyTrunk);
-    gobAContainer.add(gobADagger);
-
-    // Goblin pointy ears
-    const gobAEarL = this.add.triangle(-20, -28, 0, 0, 8, -5, 5, 7, 0x4d7c0f).setAngle(-45);
-    const gobAEarR = this.add.triangle(20, -28, 0, 0, -8, -5, -5, 7, 0x4d7c0f).setAngle(45);
-    gobAContainer.add(gobAEarL);
-    gobAContainer.add(gobAEarR);
-
-    const gobAEmblem = this.add.circle(0, -28, 22, 0x450a0a).setStrokeStyle(2.5, 0xf97316, 1);
-    const gobAText = this.add.text(0, -28, '👹', { fontSize: '24px', fontFamily: 'Segoe UI Emoji, Arial' }).setOrigin(0.5);
-    gobAContainer.add(gobAEmblem);
-    gobAContainer.add(gobAText);
-
-    const gobADirGraphics = this.add.graphics();
-    gobAContainer.add(gobADirGraphics);
-
-    const gobA: Character = {
-      name: '고블린 병사 A',
-      x: 8,
-      y: 8,
-      hp: 60,
-      maxHp: 60,
-      mp: 10,
-      maxMp: 10,
-      ap: 3,
-      maxAp: 3,
-      avatar: '👹',
-      isEnemy: true,
-      gameObject: gobAContainer,
-      moveRange: 3,
-      minAttackRange: 1,
-      maxAttackRange: 1,
-      hasMovedThisTurn: false,
-      hasAttackedThisTurn: false,
-      bodyEmblem: gobAEmblem,
-      bodyText: gobAText,
-      bodySprite: gobABody,
-      bodyParts: [gobABodyTrunk, gobADagger, gobAEarL, gobAEarR],
-      direction: 'NW',
-      dirGraphics: gobADirGraphics,
-      skinType: 'gob_warrior'
-    };
-    this.updateDirectionVisual(gobA);
-    this.characters.push(gobA);
-
-    // 2. Goblin Archer B (Orange - Ranged)
-    const gobBContainer = this.add.container(0, 0);
-    gobBContainer.add(this.add.ellipse(0, 0, 44, 22, 0x000000, 0.4));
-    
-    // Goblin Archer Sprite (Hidden by default)
-    const gobBBody = this.add.image(0, -28, 'char_goblin').setScale(1.92).setOrigin(0.5, 0.95).setVisible(false);
-    gobBContainer.add(gobBBody);
-
-    // Body & Gear
-    const gobBBodyTrunk = this.add.rectangle(0, -10, 18, 14, 0x3f6212).setStrokeStyle(1.5, 0x65a30d, 1);
-    const gobBBow = this.add.triangle(-14, -14, 0, -8, -4, 8, 4, 8, 0x78350f).setAngle(-15).setStrokeStyle(1, 0xfacc15, 1);
-    gobBContainer.add(gobBBodyTrunk);
-    gobBContainer.add(gobBBow);
-
-    // Goblin ears
-    const gobBEarL = this.add.triangle(-20, -28, 0, 0, 8, -5, 5, 7, 0x4d7c0f).setAngle(-45);
-    const gobBEarR = this.add.triangle(20, -28, 0, 0, -8, -5, -5, 7, 0x4d7c0f).setAngle(45);
-    gobBContainer.add(gobBEarL);
-    gobBContainer.add(gobBEarR);
-
-    const gobBEmblem = this.add.circle(0, -28, 22, 0x7c2d12).setStrokeStyle(2.5, 0xf97316, 1);
-    const gobBText = this.add.text(0, -28, '🏹', { fontSize: '24px', fontFamily: 'Segoe UI Emoji, Arial' }).setOrigin(0.5);
-    gobBContainer.add(gobBEmblem);
-    gobBContainer.add(gobBText);
-
-    const gobBDirGraphics = this.add.graphics();
-    gobBContainer.add(gobBDirGraphics);
-
-    const gobB: Character = {
-      name: '고블린 소총병 B',
-      x: 8,
-      y: 7,
-      hp: 50,
-      maxHp: 50,
-      mp: 20,
-      maxMp: 20,
-      ap: 3,
-      maxAp: 3,
-      avatar: '🏹',
-      isEnemy: true,
-      gameObject: gobBContainer,
-      moveRange: 3,
-      minAttackRange: 2,
-      maxAttackRange: 4,
-      hasMovedThisTurn: false,
-      hasAttackedThisTurn: false,
-      bodyEmblem: gobBEmblem,
-      bodyText: gobBText,
-      bodySprite: gobBBody,
-      bodyParts: [gobBBodyTrunk, gobBBow, gobBEarL, gobBEarR],
-      direction: 'NW',
-      dirGraphics: gobBDirGraphics,
-      skinType: 'gob_archer'
-    };
-    this.updateDirectionVisual(gobB);
-    this.characters.push(gobB);
-
-    // 3. Goblin Shaman C (Crimson - Shaman Mage)
-    const gobCContainer = this.add.container(0, 0);
-    gobCContainer.add(this.add.ellipse(0, 0, 44, 22, 0x000000, 0.4));
-    
-    // Goblin Shaman Sprite (Hidden by default)
-    const gobCBody = this.add.image(0, -28, 'char_goblin_boss').setScale(1.92).setOrigin(0.5, 0.95).setVisible(false);
-    gobCContainer.add(gobCBody);
-
-    // Body & Gear
-    const gobCBodyTrunk = this.add.triangle(0, -8, 0, -18, -11, 2, 11, 2, 0x881337).setStrokeStyle(1.5, 0xf97316, 1);
-    const gobCStaff = this.add.rectangle(15, -18, 3, 26, 0x78350f);
-    const gobCOrb = this.add.circle(15, -31, 5, 0xa855f7).setStrokeStyle(1, 0xffffff, 1);
-    gobCContainer.add(gobCBodyTrunk);
-    gobCContainer.add(gobCStaff);
-    gobCContainer.add(gobCOrb);
-
-    // Goblin Shaman Feather Crown
-    const gobCFeatherL = this.add.triangle(-6, -46, 0, 14, -3, 0, 3, 0, 0xdc2626).setAngle(-15);
-    const gobCFeatherM = this.add.triangle(0, -50, 0, 16, -3, 0, 3, 0, 0xfacc15);
-    const gobCFeatherR = this.add.triangle(6, -46, 0, 14, -3, 0, 3, 0, 0xdc2626).setAngle(15);
-    gobCContainer.add(gobCFeatherL);
-    gobCContainer.add(gobCFeatherM);
-    gobCContainer.add(gobCFeatherR);
-
-    const gobCEmblem = this.add.circle(0, -28, 22, 0x881337).setStrokeStyle(2.5, 0xf97316, 1);
-    const gobCText = this.add.text(0, -28, '🧙‍♂️', { fontSize: '24px', fontFamily: 'Segoe UI Emoji, Arial' }).setOrigin(0.5);
-    gobCContainer.add(gobCEmblem);
-    gobCContainer.add(gobCText);
-
-    const gobCDirGraphics = this.add.graphics();
-    gobCContainer.add(gobCDirGraphics);
-
-    const gobC: Character = {
-      name: '고블린 주술사 C',
-      x: 7,
-      y: 8,
-      hp: 55,
-      maxHp: 55,
-      mp: 80,
-      maxMp: 80,
-      ap: 3,
-      maxAp: 3,
-      avatar: '🧙‍♂️',
-      isEnemy: true,
-      gameObject: gobCContainer,
-      moveRange: 3,
-      minAttackRange: 2,
-      maxAttackRange: 3,
-      hasMovedThisTurn: false,
-      hasAttackedThisTurn: false,
-      bodyEmblem: gobCEmblem,
-      bodyText: gobCText,
-      bodySprite: gobCBody,
-      bodyParts: [gobCBodyTrunk, gobCStaff, gobCOrb, gobCFeatherL, gobCFeatherM, gobCFeatherR],
-      direction: 'NW',
-      dirGraphics: gobCDirGraphics,
-      skinType: 'gob_shaman'
-    };
-    this.updateDirectionVisual(gobC);
-    this.characters.push(gobC);
-
-    // 4. Goblin Assassin D (Dark Brown - Rogue Raider)
-    const gobDContainer = this.add.container(0, 0);
-    gobDContainer.add(this.add.ellipse(0, 0, 44, 22, 0x000000, 0.4));
-    
-    // Goblin Assassin Sprite (Hidden by default)
-    const gobDBody = this.add.image(0, -28, 'char_goblin').setScale(1.92).setOrigin(0.5, 0.95).setVisible(false);
-    gobDContainer.add(gobDBody);
-
-    // Body & Gear
-    const gobDBodyTrunk = this.add.rectangle(0, -10, 18, 14, 0x3f6212).setStrokeStyle(1.5, 0x65a30d, 1);
-    const gobDDaggerL = this.add.triangle(-12, -12, 0, -6, -2.5, 6, 2.5, 6, 0x94a3b8).setAngle(-25).setStrokeStyle(1, 0xef4444, 1);
-    const gobDDaggerR = this.add.triangle(12, -12, 0, -6, -2.5, 6, 2.5, 6, 0x94a3b8).setAngle(25).setStrokeStyle(1, 0xef4444, 1);
-    gobDContainer.add(gobDBodyTrunk);
-    gobDContainer.add(gobDDaggerL);
-    gobDContainer.add(gobDDaggerR);
-
-    // Goblin ears
-    const gobDEarL = this.add.triangle(-20, -28, 0, 0, 8, -5, 5, 7, 0x4d7c0f).setAngle(-45);
-    const gobDEarR = this.add.triangle(20, -28, 0, 0, -8, -5, -5, 7, 0x4d7c0f).setAngle(45);
-    gobDContainer.add(gobDEarL);
-    gobDContainer.add(gobDEarR);
-
-    const gobDEmblem = this.add.circle(0, -28, 22, 0x451a03).setStrokeStyle(2.5, 0xf97316, 1);
-    const gobDText = this.add.text(0, -28, '👤', { fontSize: '24px', fontFamily: 'Segoe UI Emoji, Arial' }).setOrigin(0.5);
-    gobDContainer.add(gobDEmblem);
-    gobDContainer.add(gobDText);
-
-    const gobDDirGraphics = this.add.graphics();
-    gobDContainer.add(gobDDirGraphics);
-
-    const gobD: Character = {
-      name: '고블린 습격자 D',
-      x: 7,
-      y: 7,
-      hp: 50,
-      maxHp: 50,
-      mp: 30,
-      maxMp: 30,
-      ap: 3,
-      maxAp: 3,
-      avatar: '👤',
-      isEnemy: true,
-      gameObject: gobDContainer,
-      moveRange: 4,
-      minAttackRange: 1,
-      maxAttackRange: 1,
-      hasMovedThisTurn: false,
-      hasAttackedThisTurn: false,
-      bodyEmblem: gobDEmblem,
-      bodyText: gobDText,
-      bodySprite: gobDBody,
-      bodyParts: [gobDBodyTrunk, gobDDaggerL, gobDDaggerR, gobDEarL, gobDEarR],
-      direction: 'NW',
-      dirGraphics: gobDDirGraphics,
-      skinType: 'gob_assassin'
-    };
-    this.updateDirectionVisual(gobD);
-    this.characters.push(gobD);
-
-    // 5. Goblin Defender E (Olive Green - Shield Tanker)
-    const gobEContainer = this.add.container(0, 0);
-    gobEContainer.add(this.add.ellipse(0, 0, 52, 26, 0x000000, 0.4));
-    
-    // Goblin Defender Sprite (Hidden by default)
-    const gobEBody = this.add.image(0, -28, 'char_goblin_boss').setScale(1.92).setOrigin(0.5, 0.95).setVisible(false);
-    gobEContainer.add(gobEBody);
-
-    // Body & Gear
-    const gobEBodyTrunk = this.add.rectangle(0, -10, 22, 16, 0x14532d).setStrokeStyle(1.5, 0x65a30d, 1);
-    const gobEShield = this.add.circle(-18, -14, 9, 0x475569).setStrokeStyle(1.5, 0xffffff, 1);
-    gobEContainer.add(gobEBodyTrunk);
-    gobEContainer.add(gobEShield);
-
-    // Goblin Shaman/Defender Horn style feathers
-    const gobEFeatherL = this.add.triangle(-6, -46, 0, 14, -3, 0, 3, 0, 0xdc2626).setAngle(-15);
-    const gobEFeatherR = this.add.triangle(6, -46, 0, 14, -3, 0, 3, 0, 0xdc2626).setAngle(15);
-    gobEContainer.add(gobEFeatherL);
-    gobEContainer.add(gobEFeatherR);
-
-    const gobEEmblem = this.add.circle(0, -28, 22, 0x14532d).setStrokeStyle(2.5, 0xf97316, 1);
-    const gobEText = this.add.text(0, -28, '🛡️', { fontSize: '24px', fontFamily: 'Segoe UI Emoji, Arial' }).setOrigin(0.5);
-    gobEContainer.add(gobEEmblem);
-    gobEContainer.add(gobEText);
-
-    const gobEDirGraphics = this.add.graphics();
-    gobEContainer.add(gobEDirGraphics);
-
-    const gobE: Character = {
-      name: '고블린 대방패병 E',
-      x: 8,
-      y: 9,
-      hp: 85,
-      maxHp: 85,
-      mp: 10,
-      maxMp: 10,
-      ap: 3,
-      maxAp: 3,
-      avatar: '🛡️',
-      isEnemy: true,
-      gameObject: gobEContainer,
-      moveRange: 2,
-      minAttackRange: 1,
-      maxAttackRange: 1,
-      hasMovedThisTurn: false,
-      hasAttackedThisTurn: false,
-      bodyEmblem: gobEEmblem,
-      bodyText: gobEText,
-      bodySprite: gobEBody,
-      bodyParts: [gobEBodyTrunk, gobEShield, gobEFeatherL, gobEFeatherR],
-      direction: 'NW',
-      dirGraphics: gobEDirGraphics,
-      skinType: 'gob_defender'
-    };
-    this.updateDirectionVisual(gobE);
-    this.characters.push(gobE);
-
-    // Attach dynamic mini HUD HP/MP graphics & permanent base faction aura rings to all characters
     this.characters.forEach(char => {
-      const ringColor = char.isEnemy ? 0xf97316 : 0x3b82f6; // Orange for enemy, Blue for ally
+      const ringColor = char.isEnemy ? 0xf97316 : 0x3b82f6;
       const auraRing = this.add.ellipse(0, 0, 52, 26);
       auraRing.setStrokeStyle(1.8, ringColor, 0.45);
-      // Add right above the base shadow (index 1) to ensure depth layout order
       char.gameObject.addAt(auraRing, 1);
 
       const hudG = this.add.graphics();
       char.gameObject.add(hudG);
       char.hudBarGraphics = hudG;
 
-      // Initial visual synchronization
       this.drawPixelArt(char);
       this.updateCharacterVisualMode(char);
     });
@@ -981,48 +1364,99 @@ export class GameScene extends Phaser.Scene {
   private updateDirectionVisual(char: Character) {
     char.dirGraphics.clear();
     
-    // Draw neon cyan sight indicator line & endpoint pointer wedge
-    const color = char.isEnemy ? 0xf97316 : 0x38bdf8;
-    char.dirGraphics.lineStyle(3.5, 0xffffff, 0.85);
-    char.dirGraphics.fillStyle(color, 1);
+    // Draw Farland Tactics style 4-way arrows if in direction selection mode
+    const showArrows = this.isDirectionSelectMode && this.selectedCharacter === char && !char.isEnemy;
+    if (showArrows) {
+      const directions: ('NE' | 'SE' | 'SW' | 'NW')[] = ['NE', 'SE', 'SW', 'NW'];
+      
+      directions.forEach(dir => {
+        const isCurrent = char.direction === dir;
+        const topColor = isCurrent ? 0xff4d4d : 0x00f3ff;
+        const sideColor = isCurrent ? 0xaa0000 : 0x007ba0;
+        const strokeColor = isCurrent ? 0xffffff : 0x00c8ff;
+        const strokeAlpha = isCurrent ? 0.95 : 0.45;
+        const alpha = isCurrent ? 1.0 : 0.65;
 
-    const startX = 0;
-    const startY = -4; // Center base height offset
+        // 1. Draw Side Facet (Depth Shadow)
+        char.dirGraphics.fillStyle(sideColor, alpha);
+        char.dirGraphics.beginPath();
+        if (dir === 'NE') {
+          char.dirGraphics.moveTo(28, -20);
+          char.dirGraphics.lineTo(36, -34);
+          char.dirGraphics.lineTo(29, -16);
+          char.dirGraphics.lineTo(22, -18);
+        } else if (dir === 'SE') {
+          char.dirGraphics.moveTo(22, -12);
+          char.dirGraphics.lineTo(36, -10);
+          char.dirGraphics.lineTo(26, -6);
+          char.dirGraphics.lineTo(18, -8);
+        } else if (dir === 'SW') {
+          char.dirGraphics.moveTo(-22, -12);
+          char.dirGraphics.lineTo(-36, -10);
+          char.dirGraphics.lineTo(-26, -6);
+          char.dirGraphics.lineTo(-18, -8);
+        } else if (dir === 'NW') {
+          char.dirGraphics.moveTo(-28, -20);
+          char.dirGraphics.lineTo(-36, -34);
+          char.dirGraphics.lineTo(-29, -16);
+          char.dirGraphics.lineTo(-22, -18);
+        }
+        char.dirGraphics.closePath();
+        char.dirGraphics.fillPath();
 
-    let targetX = 0;
-    let targetY = 0;
+        // 2. Draw Top Facet (Glow Top Face)
+        char.dirGraphics.fillStyle(topColor, alpha);
+        char.dirGraphics.beginPath();
+        if (dir === 'NE') {
+          char.dirGraphics.moveTo(20, -28);
+          char.dirGraphics.lineTo(36, -34);
+          char.dirGraphics.lineTo(28, -20);
+        } else if (dir === 'SE') {
+          char.dirGraphics.moveTo(28, -20);
+          char.dirGraphics.lineTo(36, -10);
+          char.dirGraphics.lineTo(22, -12);
+        } else if (dir === 'SW') {
+          char.dirGraphics.moveTo(-28, -20);
+          char.dirGraphics.lineTo(-36, -10);
+          char.dirGraphics.lineTo(-22, -12);
+        } else if (dir === 'NW') {
+          char.dirGraphics.moveTo(-20, -28);
+          char.dirGraphics.lineTo(-36, -34);
+          char.dirGraphics.lineTo(-28, -20);
+        }
+        char.dirGraphics.closePath();
+        char.dirGraphics.fillPath();
 
-    switch (char.direction) {
-      case 'NE': // grid x++ => screen Down-Right
-        targetX = 26;
-        targetY = 13;
-        break;
-      case 'SE': // grid y++ => screen Down-Left
-        targetX = -26;
-        targetY = 13;
-        break;
-      case 'SW': // grid x-- => screen Up-Left
-        targetX = -26;
-        targetY = -13;
-        break;
-      case 'NW': // grid y-- => screen Up-Right
-        targetX = 26;
-        targetY = -13;
-        break;
+        // 3. Draw Neon Outer Outline
+        char.dirGraphics.lineStyle(1.8, strokeColor, strokeAlpha);
+        char.dirGraphics.beginPath();
+        if (dir === 'NE') {
+          char.dirGraphics.moveTo(20, -28);
+          char.dirGraphics.lineTo(36, -34);
+          char.dirGraphics.lineTo(29, -16);
+          char.dirGraphics.lineTo(22, -18);
+        } else if (dir === 'SE') {
+          char.dirGraphics.moveTo(28, -20);
+          char.dirGraphics.lineTo(36, -10);
+          char.dirGraphics.lineTo(26, -6);
+          char.dirGraphics.lineTo(18, -8);
+        } else if (dir === 'SW') {
+          char.dirGraphics.moveTo(-28, -20);
+          char.dirGraphics.lineTo(-36, -10);
+          char.dirGraphics.lineTo(-26, -6);
+          char.dirGraphics.lineTo(-18, -8);
+        } else if (dir === 'NW') {
+          char.dirGraphics.moveTo(-20, -28);
+          char.dirGraphics.lineTo(-36, -34);
+          char.dirGraphics.lineTo(-29, -16);
+          char.dirGraphics.lineTo(-22, -18);
+        }
+        char.dirGraphics.closePath();
+        char.dirGraphics.strokePath();
+      });
     }
 
-    // Line drawing
-    char.dirGraphics.beginPath();
-    char.dirGraphics.moveTo(startX, startY);
-    char.dirGraphics.lineTo(targetX, targetY);
-    char.dirGraphics.strokePath();
-
-    // Wedge/Arrow Tip circle dot
-    char.dirGraphics.fillCircle(targetX, targetY, 4.5);
-    char.dirGraphics.lineStyle(1.5, 0xffffff, 1);
-    char.dirGraphics.strokeCircle(targetX, targetY, 4.5);
-
-    // Redraw pixel art on orientation change (to support correct mirroring/flip)
+    this.drawPedestal(char);
     this.drawPixelArt(char);
   }
 
@@ -1039,6 +1473,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   private selectCharacter(char: Character) {
+    // Enable/disable pulsing glow rings based on current selection
+    this.characters.forEach(c => {
+      if (c.glowRing) c.glowRing.setVisible(false);
+    });
+    if (char.glowRing) {
+      char.glowRing.setVisible(true);
+    }
+
     this.selectedCharacter = char;
     this.updateUIProfile(char);
 
@@ -1099,15 +1541,18 @@ export class GameScene extends Phaser.Scene {
     // Reset current modes
     this.isDirectionSelectMode = false;
     this.isPostMoveDirectionSelect = false;
+    this.isSpellMode = false;
 
     // 4. UX Fix: Automatically trigger movement mode if char has not moved yet
     const btnMove = document.getElementById('btn-move');
     const btnTurn = document.getElementById('btn-turn');
     const btnAttack = document.getElementById('btn-attack');
+    const btnSpell = document.getElementById('btn-spell');
     
     if (btnMove) btnMove.classList.remove('highlight');
     if (btnTurn) btnTurn.classList.remove('highlight');
     if (btnAttack) btnAttack.classList.remove('highlight');
+    if (btnSpell) btnSpell.classList.remove('highlight');
     this.isAttackMode = false;
 
     if (!char.isEnemy && !char.hasMovedThisTurn && this.turnManager.getState() === 'PLAYER_TURN' && !this.isGameOver) {
@@ -1131,18 +1576,40 @@ export class GameScene extends Phaser.Scene {
     const dist = Math.abs(dx) + Math.abs(dy);
     if (dist < attacker.minAttackRange || dist > attacker.maxAttackRange) return false;
 
-    // 3. Line of sight check (Living characters block projection paths)
+    // 3. Line of sight check (Static terrain obstacles always block. Characters block dynamically based on faction)
     if (dx !== 0) {
       const step = Math.sign(dx);
       for (let cx = attacker.x + step; cx !== tx; cx += step) {
-        const obs = this.characters.find(c => c.x === cx && c.y === attacker.y && c.hp > 0);
-        if (obs) return false; // Path blocked!
+        // Static terrain blocks always
+        if (this.obstacleGrid[attacker.y][cx]) return false;
+
+        // Cover shields:
+        if (attacker.isEnemy) {
+          // Enemies attacking players are blocked by ANY living unit (allies/enemies) on the path
+          const hasBlocker = this.characters.some(c => c.x === cx && c.y === attacker.y && c.hp > 0);
+          if (hasBlocker) return false;
+        } else {
+          // Players attacking are only blocked by Enemy units on the path (Allies shoot through each other)
+          const hasEnemyBlocker = this.characters.some(c => c.x === cx && c.y === attacker.y && c.hp > 0 && c.isEnemy);
+          if (hasEnemyBlocker) return false;
+        }
       }
     } else if (dy !== 0) {
       const step = Math.sign(dy);
       for (let cy = attacker.y + step; cy !== ty; cy += step) {
-        const obs = this.characters.find(c => c.x === attacker.x && c.y === cy && c.hp > 0);
-        if (obs) return false; // Path blocked!
+        // Static terrain blocks always
+        if (this.obstacleGrid[cy][attacker.x]) return false;
+
+        // Cover shields:
+        if (attacker.isEnemy) {
+          // Enemies attacking players are blocked by ANY living unit on the path
+          const hasBlocker = this.characters.some(c => c.x === attacker.x && c.y === cy && c.hp > 0);
+          if (hasBlocker) return false;
+        } else {
+          // Players attacking are only blocked by Enemy units on the path
+          const hasEnemyBlocker = this.characters.some(c => c.x === attacker.x && c.y === cy && c.hp > 0 && c.isEnemy);
+          if (hasEnemyBlocker) return false;
+        }
       }
     }
 
@@ -1311,27 +1778,54 @@ export class GameScene extends Phaser.Scene {
     const btnMove = document.getElementById('btn-move') as HTMLButtonElement;
     const btnTurn = document.getElementById('btn-turn') as HTMLButtonElement;
     const btnAttack = document.getElementById('btn-attack') as HTMLButtonElement;
+    const btnSpell1 = document.getElementById('btn-spell-1') as HTMLButtonElement;
+    const btnSpell2 = document.getElementById('btn-spell-2') as HTMLButtonElement;
     const btnWait = document.getElementById('btn-wait') as HTMLButtonElement;
     const btnEnd = document.getElementById('btn-end-turn') as HTMLButtonElement;
 
-    if (btnMove && btnTurn && btnAttack && btnWait && btnEnd) {
+    if (btnMove && btnTurn && btnAttack && btnSpell1 && btnSpell2 && btnWait && btnEnd) {
       if (isAnimating || this.isGameOver || !this.selectedCharacter || this.selectedCharacter.isEnemy) {
         btnMove.disabled = true;
         btnTurn.disabled = true;
         btnAttack.disabled = true;
+        btnSpell1.disabled = true;
+        btnSpell2.disabled = true;
         btnWait.disabled = true;
         btnEnd.disabled = this.isGameOver || isAnimating; 
       } else if (isPlayerTurn) {
-        // Can always rotate direction unless animating/gameover
-        btnMove.disabled = this.selectedCharacter.hasMovedThisTurn || this.selectedCharacter.hasAttackedThisTurn;
-        btnTurn.disabled = this.selectedCharacter.hasAttackedThisTurn; 
-        btnAttack.disabled = this.selectedCharacter.ap <= 0 || this.selectedCharacter.hasAttackedThisTurn;
-        btnWait.disabled = this.selectedCharacter.hasMovedThisTurn && this.selectedCharacter.hasAttackedThisTurn;
+        const char = this.selectedCharacter;
+        const spell1 = char.spells[0];
+        const spell2 = char.spells[1];
+
+        const canUseSpell1 = spell1 && char.mp >= spell1.cost && char.ap > 0 && !char.hasAttackedThisTurn;
+        const canUseSpell2 = spell2 && char.mp >= spell2.cost && char.ap > 0 && !char.hasAttackedThisTurn;
+
+        btnMove.disabled = char.hasMovedThisTurn || char.hasAttackedThisTurn;
+        btnTurn.disabled = char.hasAttackedThisTurn; 
+        btnAttack.disabled = char.ap <= 0 || char.hasAttackedThisTurn;
+        btnSpell1.disabled = !canUseSpell1;
+        btnSpell2.disabled = !canUseSpell2;
+        
+        if (spell1) {
+          btnSpell1.innerText = `${spell1.name} (🔮${spell1.cost})`;
+        } else {
+          btnSpell1.innerText = '스킬 1';
+        }
+
+        if (spell2) {
+          btnSpell2.innerText = `${spell2.name} (🔮${spell2.cost})`;
+        } else {
+          btnSpell2.innerText = '스킬 2';
+        }
+
+        btnWait.disabled = char.hasMovedThisTurn && char.hasAttackedThisTurn;
         btnEnd.disabled = false;
       } else {
         btnMove.disabled = true;
         btnTurn.disabled = true;
         btnAttack.disabled = true;
+        btnSpell1.disabled = true;
+        btnSpell2.disabled = true;
         btnWait.disabled = true;
         btnEnd.disabled = true;
       }
@@ -1356,16 +1850,23 @@ export class GameScene extends Phaser.Scene {
           if (!this.isGameOver) {
             // Restore players
             if (lastRealState === 'ENEMY_TURN') {
+              // 1. Process Status Effects (Burn dot / Stun CC) first
+              this.processStatusEffectsForFaction(false);
+
               this.characters.forEach(c => {
                 if (!c.isEnemy && c.hp > 0) {
                   c.ap = Math.min(c.ap + 1, c.maxAp);
+                  if (turnNumber > 1) {
+                    c.mp = Math.min(c.mp + 1, c.maxMp);
+                  }
                   c.hasMovedThisTurn = false;
                   c.hasAttackedThisTurn = false;
                   c.gameObject.alpha = 1.0; 
+                  this.updateMiniHUDBar(c);
                 }
               });
 
-              // Select first living player ONLY on real turn transition (from enemy to player turn)
+              // Select first living player ONLY on real turn transition
               const livingPlayer = this.characters.find(c => !c.isEnemy && c.hp > 0);
               if (livingPlayer) {
                 this.selectCharacter(livingPlayer);
@@ -1382,22 +1883,39 @@ export class GameScene extends Phaser.Scene {
           turnLabel.style.textShadow = '0 0 10px rgba(239, 68, 68, 0.5)';
           
           if (!this.isGameOver) {
+            // Clear selection and neon glow rings on turn change
+            if (this.selectionIndicator) {
+              this.selectionIndicator.destroy();
+              this.selectionIndicator = null;
+            }
+            this.characters.forEach(c => {
+              if (c.glowRing) c.glowRing.setVisible(false);
+            });
+            this.selectedCharacter = null;
+
             // Clear player turn timer
             this.clearTurnTimer();
 
             // Restore enemies
             if (lastRealState === 'PLAYER_TURN') {
+              // 2. Process Status Effects (Burn dot / Stun CC) first for enemies
+              this.processStatusEffectsForFaction(true);
+
               this.characters.forEach(c => {
                 if (c.isEnemy && c.hp > 0) {
                   c.ap = Math.min(c.ap + 1, c.maxAp);
+                  if (turnNumber > 1) {
+                    c.mp = Math.min(c.mp + 1, c.maxMp);
+                  }
                   c.hasMovedThisTurn = false;
                   c.hasAttackedThisTurn = false;
                   c.gameObject.alpha = 1.0;
+                  this.updateMiniHUDBar(c);
                 }
               });
               
-              // Run AI
-              this.time.delayedCall(200, () => {
+              // Run AI (Delay slightly for status popups if any)
+              this.time.delayedCall(500 * this.animationSpeedMultiplier, () => {
                 this.runAllEnemiesAI();
               });
             }
@@ -1406,6 +1924,140 @@ export class GameScene extends Phaser.Scene {
         }
       }
       this.updateActionButtonStates();
+    });
+  }
+
+  private processStatusEffectsForFaction(isEnemyFaction: boolean) {
+    if (this.isGameOver) return;
+
+    this.characters.forEach(c => {
+      if (c.hp > 0 && c.isEnemy === isEnemyFaction) {
+        // 1. Process Stun CC
+        if (c.stunTurns > 0) {
+          c.ap = 0; // Lock action points to 0
+          c.stunTurns--;
+          
+          this.drawPedestal(c);
+          this.showDialogue(c.name, '마비되어 턴이 강제 스킵된다!', 1300);
+
+          const effectText = this.add.text(c.gameObject.x, c.gameObject.y - 115, '⚡ 마비 행동불가!', {
+            fontFamily: 'DungGeunMo, Pixelify Sans, monospace',
+            fontSize: '13px',
+            color: '#00f3ff',
+            stroke: '#000000',
+            strokeThickness: 3
+          }).setOrigin(0.5).setDepth(c.gameObject.depth + 101);
+
+          this.tweens.add({
+            targets: effectText,
+            y: effectText.y - 25,
+            alpha: 0,
+            duration: 1200 * this.animationSpeedMultiplier,
+            onComplete: () => effectText.destroy()
+          });
+        }
+
+        // 2. Process Burn DoT (15% maxHp damage)
+        if (c.burnTurns > 0 && c.hp > 0) {
+          const burnDamage = Math.floor(c.maxHp * 0.15);
+          c.hp = Math.max(0, c.hp - burnDamage);
+          c.burnTurns--;
+          
+          this.drawPedestal(c);
+          this.updateMiniHUDBar(c);
+          if (this.selectedCharacter === c && !c.isEnemy) {
+            this.updateUIProfile(c);
+          }
+
+          // Trigger orange color damage text
+          this.showDamagePopup(c.gameObject, burnDamage, false, '#f97316');
+
+          const effectText = this.add.text(c.gameObject.x, c.gameObject.y - 115, '🔥 화상 지속피해!', {
+            fontFamily: 'DungGeunMo, Pixelify Sans, monospace',
+            fontSize: '13px',
+            color: '#f97316',
+            stroke: '#000000',
+            strokeThickness: 3
+          }).setOrigin(0.5).setDepth(c.gameObject.depth + 101);
+
+          this.tweens.add({
+            targets: effectText,
+            y: effectText.y - 25,
+            alpha: 0,
+            duration: 1200 * this.animationSpeedMultiplier,
+            onComplete: () => effectText.destroy()
+          });
+
+          // Flash target orange
+          this.tweens.add({
+            targets: c.gameObject,
+            x: c.gameObject.x + 4,
+            duration: 50 * this.animationSpeedMultiplier,
+            yoyo: true,
+            repeat: 2,
+            onStart: () => {
+              this.cameras.main.flash(50 * this.animationSpeedMultiplier, 249, 115, 22, false);
+            }
+          });
+
+          if (c.hp <= 0) {
+            this.handleDeath(c);
+          }
+        }
+
+        // 3. Process Poison DoT (12% maxHp damage)
+        if (c.poisonTurns > 0 && c.hp > 0) {
+          const poisonDamage = Math.floor(c.maxHp * 0.12);
+          c.hp = Math.max(0, c.hp - poisonDamage);
+          c.poisonTurns--;
+
+          this.drawPedestal(c);
+          this.updateMiniHUDBar(c);
+          if (this.selectedCharacter === c && !c.isEnemy) {
+            this.updateUIProfile(c);
+          }
+
+          // Green poison damage text
+          this.showDamagePopup(c.gameObject, poisonDamage, false, '#22c55e');
+
+          const effectText = this.add.text(c.gameObject.x, c.gameObject.y - 115, '🤢 독 지속피해!', {
+            fontFamily: 'DungGeunMo, Pixelify Sans, monospace',
+            fontSize: '13px',
+            color: '#22c55e',
+            stroke: '#000000',
+            strokeThickness: 3
+          }).setOrigin(0.5).setDepth(c.gameObject.depth + 101);
+
+          this.tweens.add({
+            targets: effectText,
+            y: effectText.y - 25,
+            alpha: 0,
+            duration: 1200 * this.animationSpeedMultiplier,
+            onComplete: () => effectText.destroy()
+          });
+
+          // Flash target green
+          this.tweens.add({
+            targets: c.gameObject,
+            x: c.gameObject.x + 4,
+            duration: 50 * this.animationSpeedMultiplier,
+            yoyo: true,
+            repeat: 2,
+            onStart: () => {
+              this.cameras.main.flash(50 * this.animationSpeedMultiplier, 34, 197, 94, false);
+            }
+          });
+
+          if (c.hp <= 0) {
+            this.handleDeath(c);
+          }
+        }
+      }
+    });
+
+    // Check if the DoT damage cleared the opposing faction entirely
+    this.time.delayedCall(400 * this.animationSpeedMultiplier, () => {
+      this.checkGameConditions();
     });
   }
 
@@ -1517,16 +2169,116 @@ export class GameScene extends Phaser.Scene {
     const btnAttack = document.getElementById('btn-attack');
     const btnWait = document.getElementById('btn-wait');
     const btnEnd = document.getElementById('btn-end-turn');
+    const btnSkip = document.getElementById('btn-skip-toggle');
+
+    if (btnSkip) {
+      btnSkip.addEventListener('click', () => {
+        btnSkip.classList.toggle('active');
+        if (btnSkip.classList.contains('active')) {
+          this.animationSpeedMultiplier = 0.05;
+        } else {
+          this.animationSpeedMultiplier = 1.0;
+        }
+      });
+    }
+
+    const btnCheat = document.getElementById('btn-cheat-win');
+    if (btnCheat) {
+      btnCheat.addEventListener('click', () => {
+        if (this.isGameOver) return;
+
+        // Force kill all active enemies on the field
+        this.characters.forEach(c => {
+          if (c.isEnemy && c.hp > 0) {
+            c.hp = 0;
+            this.handleDeath(c);
+          }
+        });
+        
+        const activeLeon = this.characters.find(c => !c.isEnemy && c.hp > 0);
+        if (activeLeon) {
+          this.showDialogue(activeLeon.name, '치트키 발동! 적군이 일시에 전멸했다!', 1200);
+        }
+
+        this.time.delayedCall(800 * this.animationSpeedMultiplier, () => {
+          if (this.currentStageIndex === STAGE_PRESETS.length - 1) {
+            this.triggerEndGame('COMPLETE');
+          } else {
+            this.triggerEndGame('VICTORY');
+          }
+        });
+      });
+    }
+
+    const btnSpell1 = document.getElementById('btn-spell-1');
+    const btnSpell2 = document.getElementById('btn-spell-2');
+
+    const clearSpellHighlights = () => {
+      if (btnSpell1) btnSpell1.classList.remove('highlight');
+      if (btnSpell2) btnSpell2.classList.remove('highlight');
+    };
+
+    if (btnSpell1) {
+      btnSpell1.addEventListener('click', () => {
+        if (this.turnManager.getState() !== 'PLAYER_TURN' || !this.selectedCharacter || this.isGameOver) return;
+        const char = this.selectedCharacter;
+        const spell = char.spells[0];
+        const canUseSpell = spell && char.mp >= spell.cost && char.ap > 0 && !char.hasAttackedThisTurn;
+        if (!canUseSpell) return;
+
+        this.selectedSpellIndex = 0;
+        this.isSpellMode = true; // Force true when clicking specific spell
+        this.isMovementMode = false;
+        this.isAttackMode = false;
+        this.isDirectionSelectMode = false;
+        
+        if (btnMove) btnMove.classList.remove('highlight');
+        if (btnTurn) btnTurn.classList.remove('highlight');
+        if (btnAttack) btnAttack.classList.remove('highlight');
+        clearSpellHighlights();
+
+        if (this.isSpellMode) {
+          btnSpell1.classList.add('highlight');
+        }
+      });
+    }
+
+    if (btnSpell2) {
+      btnSpell2.addEventListener('click', () => {
+        if (this.turnManager.getState() !== 'PLAYER_TURN' || !this.selectedCharacter || this.isGameOver) return;
+        const char = this.selectedCharacter;
+        const spell = char.spells[1];
+        const canUseSpell = spell && char.mp >= spell.cost && char.ap > 0 && !char.hasAttackedThisTurn;
+        if (!canUseSpell) return;
+
+        this.selectedSpellIndex = 1;
+        this.isSpellMode = true;
+        this.isMovementMode = false;
+        this.isAttackMode = false;
+        this.isDirectionSelectMode = false;
+        
+        if (btnMove) btnMove.classList.remove('highlight');
+        if (btnTurn) btnTurn.classList.remove('highlight');
+        if (btnAttack) btnAttack.classList.remove('highlight');
+        clearSpellHighlights();
+
+        if (this.isSpellMode) {
+          btnSpell2.classList.add('highlight');
+        }
+      });
+    }
 
     if (btnMove) {
       btnMove.addEventListener('click', () => {
         if (this.turnManager.getState() !== 'PLAYER_TURN' || !this.selectedCharacter || this.selectedCharacter.hasMovedThisTurn || this.isGameOver) return;
         this.isMovementMode = !this.isMovementMode;
         this.isAttackMode = false;
+        this.isSpellMode = false;
         this.isDirectionSelectMode = false;
         
         if (btnAttack) btnAttack.classList.remove('highlight');
         if (btnTurn) btnTurn.classList.remove('highlight');
+        clearSpellHighlights();
 
         if (this.isMovementMode) {
           btnMove.classList.add('highlight');
@@ -1542,10 +2294,12 @@ export class GameScene extends Phaser.Scene {
         this.isDirectionSelectMode = !this.isDirectionSelectMode;
         this.isMovementMode = false;
         this.isAttackMode = false;
+        this.isSpellMode = false;
         this.isPostMoveDirectionSelect = false;
 
         if (btnMove) btnMove.classList.remove('highlight');
         if (btnAttack) btnAttack.classList.remove('highlight');
+        clearSpellHighlights();
 
         if (this.isDirectionSelectMode) {
           btnTurn.classList.add('highlight');
@@ -1561,10 +2315,12 @@ export class GameScene extends Phaser.Scene {
         if (this.turnManager.getState() !== 'PLAYER_TURN' || !this.selectedCharacter || this.selectedCharacter.ap <= 0 || this.selectedCharacter.hasAttackedThisTurn || this.isGameOver) return;
         this.isAttackMode = !this.isAttackMode;
         this.isMovementMode = false;
+        this.isSpellMode = false;
         this.isDirectionSelectMode = false;
         
         if (btnMove) btnMove.classList.remove('highlight');
         if (btnTurn) btnTurn.classList.remove('highlight');
+        clearSpellHighlights();
 
         if (this.isAttackMode) {
           btnAttack.classList.add('highlight');
@@ -1577,15 +2333,18 @@ export class GameScene extends Phaser.Scene {
     if (btnWait) {
       btnWait.addEventListener('click', () => {
         if (this.turnManager.getState() !== 'PLAYER_TURN' || !this.selectedCharacter || this.isGameOver) return;
+        this.selectedCharacter.ap = 0;
         this.selectedCharacter.hasMovedThisTurn = true;
         this.selectedCharacter.hasAttackedThisTurn = true; 
         this.isMovementMode = false;
         this.isAttackMode = false;
+        this.isSpellMode = false;
         this.isDirectionSelectMode = false;
         
         if (btnMove) btnMove.classList.remove('highlight');
         if (btnTurn) btnTurn.classList.remove('highlight');
         if (btnAttack) btnAttack.classList.remove('highlight');
+        clearSpellHighlights();
         
         this.checkCharacterTurnEnd(this.selectedCharacter);
         this.updateActionButtonStates();
@@ -1599,10 +2358,12 @@ export class GameScene extends Phaser.Scene {
         if (this.turnManager.getState() !== 'PLAYER_TURN' || this.isGameOver) return;
         this.isMovementMode = false;
         this.isAttackMode = false;
+        this.isSpellMode = false;
         this.isDirectionSelectMode = false;
         if (btnMove) btnMove.classList.remove('highlight');
         if (btnTurn) btnTurn.classList.remove('highlight');
         if (btnAttack) btnAttack.classList.remove('highlight');
+        clearSpellHighlights();
         this.turnManager.endPlayerTurn();
       });
     }
@@ -1626,8 +2387,8 @@ export class GameScene extends Phaser.Scene {
           });
           btn.classList.add('active');
 
-          // Change state limit
-          this.turnTimeLimit = limit.val;
+          // Change state limit (Force 0 to disable turn limits)
+          this.turnTimeLimit = 0;
 
           // If currently player's turn, instantly reboot countdown
           if (this.turnManager.getState() === 'PLAYER_TURN' && !this.isGameOver) {
@@ -1648,6 +2409,27 @@ export class GameScene extends Phaser.Scene {
         } else {
           btnAvatar.textContent = '숨김';
           btnAvatar.classList.remove('active');
+        }
+      });
+    }
+
+    const btnNext = document.getElementById('btn-next-stage');
+    if (btnNext) {
+      btnNext.addEventListener('click', () => {
+        const overlay = document.getElementById('stage-clear-overlay');
+        if (overlay) overlay.classList.add('hidden');
+        
+        this.isGameOver = false;
+
+        const livingEnemies = this.characters.filter(c => c.isEnemy && c.hp > 0);
+        if (livingEnemies.length === 0) {
+          if (this.currentStageIndex < STAGE_PRESETS.length - 1) {
+            this.loadStage(this.currentStageIndex + 1);
+          } else {
+            this.loadStage(0);
+          }
+        } else {
+          this.loadStage(this.currentStageIndex);
         }
       });
     }
@@ -1681,7 +2463,58 @@ export class GameScene extends Phaser.Scene {
   }
 
   private handlePointerMove(pointer: Phaser.Input.Pointer) {
-    const gridPos = this.screenToGrid(pointer.worldX, pointer.y);
+    // 1. Drag Panning check with Left-Click
+    if (pointer.isDown && !pointer.rightButtonDown()) {
+      const dist = Phaser.Math.Distance.Between(this.startPointerX, this.startPointerY, pointer.x, pointer.y);
+      if (dist > 6) {
+        this.isDraggingCamera = true;
+        this.isDragModeActive = true;
+      }
+    }
+
+    if (this.isDraggingCamera) {
+      const zoom = this.cameras.main.zoom;
+      const dx = pointer.x - this.dragStartX;
+      const dy = pointer.y - this.dragStartY;
+
+      this.dragStartX = pointer.x;
+      this.dragStartY = pointer.y;
+
+      this.cameras.main.scrollX = this.cameras.main.scrollX - dx / zoom;
+      this.cameras.main.scrollY = this.cameras.main.scrollY - dy / zoom;
+
+      // Keep dynamic scroll clamping operational
+      const maxScrollX = 300 + (this.gridWidth - 8) * 45;
+      const maxScrollY = 250 + (this.gridHeight - 8) * 30;
+      this.cameras.main.scrollX = Phaser.Math.Clamp(this.cameras.main.scrollX, -maxScrollX, maxScrollX);
+      this.cameras.main.scrollY = Phaser.Math.Clamp(this.cameras.main.scrollY, -maxScrollY, maxScrollY);
+      return;
+    }
+
+    // Realtime orientation hover preview for Direction Selection Mode (Farland Tactics 360-degree sweep)
+    if (this.isDirectionSelectMode && this.selectedCharacter && !this.selectedCharacter.isEnemy) {
+      const char = this.selectedCharacter;
+      const charScreenPos = this.gridToScreen(char.x, char.y);
+      const dx = pointer.worldX - charScreenPos.x;
+      const dy = pointer.worldY - (charScreenPos.y - 24); // Body offset
+
+      let hoverDir: 'NE' | 'SE' | 'SW' | 'NW' = char.direction;
+      if (dx > 0) {
+        hoverDir = dy > 0 ? 'SE' : 'NE';
+      } else {
+        hoverDir = dy > 0 ? 'SW' : 'NW';
+      }
+
+      if (char.direction !== hoverDir) {
+        char.direction = hoverDir;
+        this.updateDirectionVisual(char);
+        this.updateUIProfile(char);
+      }
+      this.hoverTile = null; 
+      return;
+    }
+
+    const gridPos = this.screenToGrid(pointer.worldX, pointer.worldY);
 
     if (
       gridPos.x >= 0 && gridPos.x < this.gridWidth &&
@@ -1689,38 +2522,8 @@ export class GameScene extends Phaser.Scene {
     ) {
       this.hoverTile = gridPos;
 
-      // Realtime orientation preview if in Direction Selection Mode (Extended Straight line check)
-      if (this.isDirectionSelectMode && this.selectedCharacter && !this.selectedCharacter.isEnemy) {
-        const char = this.selectedCharacter;
-        const dx = gridPos.x - char.x;
-        const dy = gridPos.y - char.y;
+      // (Realtime orientation preview during Attack Mode hover removed to prevent breaking established directions until clicking)
 
-        // If hovered tile is on the same straight cross-axis lines
-        if ((dx === 0 && dy !== 0) || (dx !== 0 && dy === 0)) {
-          if (dx !== 0) char.direction = dx > 0 ? 'NE' : 'SW';
-          else if (dy !== 0) char.direction = dy > 0 ? 'SE' : 'NW';
-
-          this.updateDirectionVisual(char);
-          this.updateUIProfile(char); 
-        }
-      }
-
-      // Realtime orientation preview during Attack Mode hover
-      if (this.isAttackMode && this.selectedCharacter && !this.selectedCharacter.isEnemy) {
-        const char = this.selectedCharacter;
-        const dx = gridPos.x - char.x;
-        const dy = gridPos.y - char.y;
-
-        if (this.isCoordAttackable(char, gridPos.x, gridPos.y)) {
-          if (Math.abs(dx) > Math.abs(dy)) {
-            char.direction = dx > 0 ? 'NE' : 'SW';
-          } else if (Math.abs(dy) > Math.abs(dx)) {
-            char.direction = dy > 0 ? 'SE' : 'NW';
-          }
-          this.updateDirectionVisual(char);
-          this.updateUIProfile(char);
-        }
-      }
 
       // Realtime floating HUD update on hovered living character
       const hoveredChar = this.characters.find(
@@ -1742,14 +2545,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   private handlePointerDown(_pointer: Phaser.Input.Pointer) {
-    if (this.turnManager.getState() !== 'PLAYER_TURN' || this.isGameOver) return;
-    if (!this.hoverTile) return;
-
     const pointer = _pointer;
     const isRightClick = pointer.rightButtonDown() || pointer.button === 2;
 
-    // A. Right Click Undo handles (Cancel movement and restore coordinates before direction select)
     if (isRightClick) {
+      // Right-Click is isolated strictly for Undo/Cancel actions!
+      if (this.turnManager.getState() !== 'PLAYER_TURN' || this.isGameOver) return;
+      
+      // A. Right Click Undo handles (Cancel movement and restore coordinates before direction select)
       if (this.isDirectionSelectMode && this.isPostMoveDirectionSelect && this.selectedCharacter && !this.selectedCharacter.isEnemy) {
         const char = this.selectedCharacter;
         
@@ -1776,57 +2579,90 @@ export class GameScene extends Phaser.Scene {
         this.checkCharacterTurnEnd(char);
         this.updateActionButtonStates();
         this.showDialogue(char.name, '이동을 취소하고 복귀했다.', 1200);
+      }
+      return;
+    }
+
+    // Left-Click Down: Initialize click-vs-drag gesture thresholds
+    this.isDraggingCamera = false;
+    this.isDragModeActive = false;
+    this.startPointerX = pointer.x;
+    this.startPointerY = pointer.y;
+    this.dragStartX = pointer.x;
+    this.dragStartY = pointer.y;
+  }
+
+  private handlePointerUp(pointer: Phaser.Input.Pointer) {
+    if (pointer.button === 0) { // Left Click Up
+      const wasDragging = this.isDragModeActive;
+      this.isDraggingCamera = false;
+      this.isDragModeActive = false;
+
+      // Trigger actual tactical tile click ONLY if the player was NOT dragging the viewport
+      if (!wasDragging) {
+        this.executeActualTileClick();
+      }
+    }
+  }
+
+  private executeActualTileClick() {
+    if (this.turnManager.getState() !== 'PLAYER_TURN' || this.isGameOver) return;
+
+    // A. Spell Casting execution click
+    if (this.isSpellMode && this.selectedCharacter && !this.selectedCharacter.isEnemy) {
+      if (this.hoverTile && this.isCoordSpellRange(this.selectedCharacter, this.hoverTile.x, this.hoverTile.y)) {
+        const attacker = this.selectedCharacter;
+        const targetTile = this.hoverTile;
+
+        this.isSpellMode = false;
+        const btnSpell1 = document.getElementById('btn-spell-1');
+        const btnSpell2 = document.getElementById('btn-spell-2');
+        if (btnSpell1) btnSpell1.classList.remove('highlight');
+        if (btnSpell2) btnSpell2.classList.remove('highlight');
+
+        this.executeSpell(attacker, targetTile);
         return;
       }
     }
 
-    // B. Direction selection clicks take priority (Extended straight axis clicks)
-    if (this.isDirectionSelectMode && this.selectedCharacter && !this.selectedCharacter.isEnemy && !this.selectedCharacter.hasAttackedThisTurn && !isRightClick) {
+    // Commitment check for Direction Select Mode (Left click completes direction selection)
+    if (this.isDirectionSelectMode && this.selectedCharacter && !this.selectedCharacter.isEnemy) {
       const char = this.selectedCharacter;
-      const dx = this.hoverTile.x - char.x;
-      const dy = this.hoverTile.y - char.y;
+      this.isDirectionSelectMode = false;
 
-      // Must be on the horizontal/vertical axis path
-      if ((dx === 0 && dy !== 0) || (dx !== 0 && dy === 0)) {
-        if (dx !== 0) char.direction = dx > 0 ? 'NE' : 'SW';
-        else if (dy !== 0) char.direction = dy > 0 ? 'SE' : 'NW';
+      const btnTurn = document.getElementById('btn-turn');
+      if (btnTurn) btnTurn.classList.remove('highlight');
 
-        this.updateDirectionVisual(char);
-        this.isDirectionSelectMode = false;
-
-        const btnTurn = document.getElementById('btn-turn');
-        if (btnTurn) btnTurn.classList.remove('highlight');
-
-        if (this.isPostMoveDirectionSelect) {
-          // If we finished a move, automatically transition into attack mode
-          this.isPostMoveDirectionSelect = false;
-          
-          if (char.ap > 0 && !char.hasAttackedThisTurn) {
-            this.isAttackMode = true;
-            const btnAttack = document.getElementById('btn-attack');
-            if (btnAttack) btnAttack.classList.add('highlight');
-          }
-        }
-
+      if (this.isPostMoveDirectionSelect) {
+        this.isPostMoveDirectionSelect = false;
+        // Auto transition to attack mode after moving completes
+        this.isAttackMode = true;
+        const btnAttack = document.getElementById('btn-attack');
+        if (btnAttack) btnAttack.classList.add('highlight');
+        this.showDialogue(char.name, '공격 대상을 선택해라.', 1500);
+      } else {
         this.checkCharacterTurnEnd(char);
-        this.updateActionButtonStates();
-        return;
       }
+
+      this.updateDirectionVisual(char);
+      this.updateActionButtonStates();
+      return;
     }
+
+    if (!this.hoverTile) return;
 
     // C. UX Fix: Clicking a living ally character ALWAYS switches selection immediately
-    // Note: Do not switch selection if clicking an enemy character or right clicking
     const clickedAlly = this.characters.find(
       c => !c.isEnemy && c.x === this.hoverTile!.x && c.y === this.hoverTile!.y && c.hp > 0
     );
 
-    if (clickedAlly && !this.isDirectionSelectMode && !isRightClick) {
+    if (clickedAlly && !this.isDirectionSelectMode) {
       this.selectCharacter(clickedAlly);
       return;
     }
 
     // D-1. Auto-Chain Attack check when clicking an enemy in Move/Direction modes
-    if ((this.isMovementMode || this.isDirectionSelectMode) && this.selectedCharacter && !this.selectedCharacter.isEnemy && !isRightClick) {
+    if ((this.isMovementMode || this.isDirectionSelectMode) && this.selectedCharacter && !this.selectedCharacter.isEnemy) {
       const char = this.selectedCharacter;
       const clickedEnemy = this.characters.find(
         c => c.isEnemy && c.x === this.hoverTile!.x && c.y === this.hoverTile!.y && c.hp > 0
@@ -1891,7 +2727,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    if (!this.selectedCharacter || isRightClick) return;
+    if (!this.selectedCharacter) return;
 
     // D. Movement execution / Self click for direction select
     if (this.isMovementMode && !this.selectedCharacter.hasMovedThisTurn && !this.selectedCharacter.hasAttackedThisTurn) {
@@ -1975,9 +2811,312 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private executeSpell(attacker: Character, targetTile: Point, spellIndex: number = this.selectedSpellIndex) {
+    const spell = attacker.spells[spellIndex];
+    if (!spell) return;
+
+    this.previousState = this.turnManager.getState();
+    this.turnManager.setState('ANIMATING');
+
+    // Consume MP & AP
+    attacker.mp = Math.max(0, attacker.mp - spell.cost);
+    attacker.ap = Math.max(0, attacker.ap - 1);
+    attacker.hasAttackedThisTurn = true;
+
+    // Face targeting direction
+    const dx = targetTile.x - attacker.x;
+    const dy = targetTile.y - attacker.y;
+    if (Math.abs(dx) > Math.abs(dy)) {
+      attacker.direction = dx > 0 ? 'SE' : 'NW';
+    } else if (Math.abs(dy) > Math.abs(dx)) {
+      attacker.direction = dy > 0 ? 'SW' : 'NE';
+    }
+    this.updateDirectionVisual(attacker);
+    this.updateUIProfile(attacker);
+    this.updateMiniHUDBar(attacker);
+
+    // 1. Spawning gorgeous expanding Neon Magic Circle at the target center
+    const targetPos = this.gridToScreen(targetTile.x, targetTile.y);
+    const magicCircle = this.add.graphics();
+    magicCircle.setPosition(targetPos.x, targetPos.y);
+    magicCircle.setDepth(targetPos.y - 2);
+
+    const isEnemy = attacker.isEnemy;
+    const isHealing = spell.effectType === 'heal';
+    const color = isHealing ? 0x10b981 : (isEnemy ? 0xf97316 : 0xcc33ff);
+
+    magicCircle.lineStyle(2.5, color, 0.9);
+    magicCircle.strokeEllipse(0, 0, 48, 24);
+    magicCircle.lineStyle(1.5, color, 0.6);
+    magicCircle.strokeEllipse(0, 0, 24, 12);
+    
+    magicCircle.beginPath();
+    magicCircle.moveTo(-24, 0);
+    magicCircle.lineTo(24, 0);
+    magicCircle.moveTo(0, -12);
+    magicCircle.lineTo(0, 12);
+    magicCircle.strokePath();
+
+    magicCircle.setScale(0);
+    
+    // Play spellcast dialogue
+    this.showDialogue(attacker.name, `[스킬] ${spell.name}!`, 1500);
+
+    this.tweens.add({
+      targets: magicCircle,
+      scaleX: 1.3,
+      scaleY: 1.3,
+      alpha: { start: 0.1, to: 1.0 },
+      duration: 380 * this.animationSpeedMultiplier,
+      ease: 'Back.easeOut',
+      onComplete: () => {
+        this.executeSpellImpactFX(attacker, targetTile, magicCircle, spellIndex);
+      }
+    });
+  }
+
+  private executeSpellImpactFX(attacker: Character, targetTile: Point, magicCircle: Phaser.GameObjects.Graphics, spellIndex: number = this.selectedSpellIndex) {
+    const spell = attacker.spells[spellIndex];
+    if (!spell) return;
+
+    const splashTiles: Point[] = [];
+    const hx = targetTile.x;
+    const hy = targetTile.y;
+
+    if (spell.type === 'AoE') {
+      splashTiles.push({ x: hx, y: hy });
+      splashTiles.push({ x: hx + 1, y: hy });
+      splashTiles.push({ x: hx - 1, y: hy });
+      splashTiles.push({ x: hx, y: hy + 1 });
+      splashTiles.push({ x: hx, y: hy - 1 });
+    } else if (spell.type === 'Line') {
+      const dx = hx - attacker.x;
+      const dy = hy - attacker.y;
+      if (dx === 0 || dy === 0) {
+        const stepX = Math.sign(dx);
+        const stepY = Math.sign(dy);
+        let cx = attacker.x + stepX;
+        let cy = attacker.y + stepY;
+        while (true) {
+          splashTiles.push({ x: cx, y: cy });
+          if (cx === hx && cy === hy) break;
+          cx += stepX;
+          cy += stepY;
+        }
+      } else {
+        splashTiles.push({ x: hx, y: hy });
+      }
+    } else {
+      splashTiles.push({ x: hx, y: hy });
+    }
+
+    // 2. Play elemental blast fx on each splash target cell
+    const isEnemy = attacker.isEnemy;
+    const isHealing = spell && spell.effectType === 'heal';
+    
+    let beamColor = isEnemy ? 0xff4500 : 0x00ffff; // Fire red or Lightning cyan
+    if (isHealing) {
+      beamColor = 0x10b981; // Emerald green healing beam
+    }
+
+    splashTiles.forEach(tile => {
+      if (tile.x >= 0 && tile.x < this.gridWidth && tile.y >= 0 && tile.y < this.gridHeight) {
+        const cellPos = this.gridToScreen(tile.x, tile.y);
+        const beam = this.add.graphics();
+        beam.setPosition(cellPos.x, cellPos.y);
+        beam.setDepth(cellPos.y + 100);
+
+        beam.fillStyle(beamColor, 0.85);
+        beam.beginPath();
+        beam.moveTo(-16, -180);
+        beam.lineTo(16, -180);
+        beam.lineTo(24, 0);
+        beam.lineTo(-24, 0);
+        beam.closePath();
+        beam.fillPath();
+
+        beam.fillStyle(0xffffff, 0.95);
+        beam.beginPath();
+        beam.moveTo(-6, -180);
+        beam.lineTo(6, -180);
+        beam.lineTo(10, 0);
+        beam.lineTo(-10, 0);
+        beam.closePath();
+        beam.fillPath();
+
+        this.tweens.add({
+          targets: beam,
+          alpha: 0,
+          scaleX: 1.5,
+          duration: 350 * this.animationSpeedMultiplier,
+          onComplete: () => {
+            beam.destroy();
+          }
+        });
+      }
+    });
+
+    // 3. Process target damage (Friendly Fire check / Healing filter check)
+    const targets = this.characters.filter(c => 
+      c.hp > 0 && 
+      (isHealing ? (c.isEnemy === attacker.isEnemy) : (c.isEnemy !== attacker.isEnemy)) && 
+      splashTiles.some(t => t.x === c.x && t.y === c.y)
+    );
+
+    targets.forEach(defender => {
+      if (isHealing) {
+        // Heal logic: Grace Air heals 25% maxHp AoE, Holy Heart heals 40% maxHp
+        const healPercent = spell.name === '그레이스 에어' ? 0.25 : 0.40;
+        const healAmount = Math.floor(defender.maxHp * healPercent);
+        defender.hp = Math.min(defender.maxHp, defender.hp + healAmount);
+        this.updateMiniHUDBar(defender);
+
+        if (this.selectedCharacter === defender && !defender.isEnemy) {
+          this.updateUIProfile(defender);
+        }
+
+        // Green floating +value
+        this.showDamagePopup(defender.gameObject, -healAmount, false, '#10b981');
+
+        const effectText = this.add.text(defender.gameObject.x, defender.gameObject.y - 105, '💚 치유!', {
+          fontFamily: 'DungGeunMo, Pixelify Sans, monospace',
+          fontSize: '14px',
+          color: '#10b981',
+          stroke: '#000000',
+          strokeThickness: 3
+        }).setOrigin(0.5).setDepth(defender.gameObject.depth + 101);
+
+        this.tweens.add({
+          targets: effectText,
+          y: effectText.y - 20,
+          alpha: 0,
+          duration: 1000,
+          onComplete: () => effectText.destroy()
+        });
+
+        // Bounce green target scale instead of shake hurt
+        this.tweens.add({
+          targets: defender.gameObject,
+          scaleY: 1.15,
+          scaleX: 0.88,
+          duration: 80 * this.animationSpeedMultiplier,
+          yoyo: true,
+          repeat: 1
+        });
+        return;
+      }
+
+      const baseDamage = attacker.isEnemy ? 25 : 36;
+      const finalDamage = Math.floor(baseDamage * (0.9 + Math.random() * 0.2));
+
+      defender.hp = Math.max(0, defender.hp - finalDamage);
+      this.updateMiniHUDBar(defender);
+
+      if (this.selectedCharacter === defender && !defender.isEnemy) {
+        this.updateUIProfile(defender);
+      }
+
+      this.showDamagePopup(defender.gameObject, finalDamage, false);
+
+      // Trigger magic status effects based on spell config debuffType
+      if (spell && spell.debuffType === 'burn') {
+        defender.burnTurns = 3;
+        this.drawPedestal(defender);
+
+        const effectText = this.add.text(defender.gameObject.x, defender.gameObject.y - 105, '🔥 화상!', {
+          fontFamily: 'DungGeunMo, Pixelify Sans, monospace',
+          fontSize: '14px',
+          color: '#f97316',
+          stroke: '#000000',
+          strokeThickness: 3
+        }).setOrigin(0.5).setDepth(defender.gameObject.depth + 101);
+
+        this.tweens.add({
+          targets: effectText,
+          y: effectText.y - 20,
+          alpha: 0,
+          duration: 1000,
+          onComplete: () => effectText.destroy()
+        });
+      } else if (spell && spell.debuffType === 'stun') {
+        defender.stunTurns = 1;
+        this.drawPedestal(defender);
+
+        const effectText = this.add.text(defender.gameObject.x, defender.gameObject.y - 105, '⚡ 기절!', {
+          fontFamily: 'DungGeunMo, Pixelify Sans, monospace',
+          fontSize: '14px',
+          color: '#00f3ff',
+          stroke: '#000000',
+          strokeThickness: 3
+        }).setOrigin(0.5).setDepth(defender.gameObject.depth + 101);
+
+        this.tweens.add({
+          targets: effectText,
+          y: effectText.y - 20,
+          alpha: 0,
+          duration: 1000,
+          onComplete: () => effectText.destroy()
+        });
+      } else if (spell && spell.debuffType === 'poison') {
+        defender.poisonTurns = 3;
+        this.drawPedestal(defender);
+
+        const effectText = this.add.text(defender.gameObject.x, defender.gameObject.y - 105, '🤢 중독!', {
+          fontFamily: 'DungGeunMo, Pixelify Sans, monospace',
+          fontSize: '14px',
+          color: '#22c55e',
+          stroke: '#000000',
+          strokeThickness: 3
+        }).setOrigin(0.5).setDepth(defender.gameObject.depth + 101);
+
+        this.tweens.add({
+          targets: effectText,
+          y: effectText.y - 20,
+          alpha: 0,
+          duration: 1000,
+          onComplete: () => effectText.destroy()
+        });
+      }
+
+      this.tweens.add({
+        targets: defender.gameObject,
+        x: defender.gameObject.x + (attacker.x < defender.x ? 6 : -6),
+        duration: 50 * this.animationSpeedMultiplier,
+        yoyo: true,
+        repeat: 2,
+        onStart: () => {
+          this.cameras.main.flash(50 * this.animationSpeedMultiplier, 239, 68, 68, false);
+        }
+      });
+
+      if (defender.hp <= 0) {
+        this.handleDeath(defender);
+      }
+    });
+
+    // 4. Wrap up magic state
+    this.time.delayedCall(450 * this.animationSpeedMultiplier, () => {
+      this.tweens.add({
+        targets: magicCircle,
+        alpha: 0,
+        scaleX: 0.2,
+        scaleY: 0.2,
+        duration: 150 * this.animationSpeedMultiplier,
+        onComplete: () => {
+          magicCircle.destroy();
+        }
+      });
+
+      this.turnManager.setState(this.previousState);
+      this.checkCharacterTurnEnd(attacker);
+      this.updateActionButtonStates();
+    });
+  }
+
   private checkCharacterTurnEnd(char: Character) {
-    // Only flag wait state visual if both actions (Move, Attack) are spent and not in direction mode
-    if (char.hasMovedThisTurn && char.hasAttackedThisTurn && !this.isDirectionSelectMode) {
+    const isFinished = char.ap <= 0 || char.hasAttackedThisTurn || (char.hasMovedThisTurn && char.hasAttackedThisTurn);
+
+    if (isFinished && !this.isDirectionSelectMode) {
       char.gameObject.alpha = 0.55; 
     } else {
       char.gameObject.alpha = 1.0;
@@ -1997,41 +3136,43 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    const tweensConfig = moveSteps.map((step) => {
+    const runStep = (index: number) => {
+      if (index >= moveSteps.length) {
+        this.turnManager.setState(this.previousState);
+        onComplete();
+        return;
+      }
+
+      const step = moveSteps[index];
+      const prev = path[index];
       const screenPos = this.gridToScreen(step.x, step.y);
-      return {
+
+      // Force isometric direction alignment immediately BEFORE the movement step tween launches
+      const dx = step.x - prev.x;
+      const dy = step.y - prev.y;
+      if (dx > 0) char.direction = 'SE';
+      else if (dy > 0) char.direction = 'SW';
+      else if (dx < 0) char.direction = 'NW';
+      else if (dy < 0) char.direction = 'NE';
+      
+      this.updateDirectionVisual(char);
+
+      this.tweens.add({
         targets: char.gameObject,
         x: screenPos.x,
         y: screenPos.y,
-        duration: 250,
+        duration: 250 * this.animationSpeedMultiplier,
         ease: 'Linear',
-        onStart: () => {
-          // Face the direction of the stepping step
-          const dx = step.x - char.x;
-          const dy = step.y - char.y;
-          if (dx > 0) char.direction = 'NE';
-          else if (dy > 0) char.direction = 'SE';
-          else if (dx < 0) char.direction = 'SW';
-          else if (dy < 0) char.direction = 'NW';
-          
-          this.updateDirectionVisual(char);
-        },
         onComplete: () => {
           char.x = step.x;
           char.y = step.y;
           char.gameObject.setDepth(screenPos.y + 10);
+          runStep(index + 1);
         }
-      };
-    });
+      });
+    };
 
-    this.tweens.chain({
-      targets: char.gameObject,
-      tweens: tweensConfig,
-      onComplete: () => {
-        this.turnManager.setState(this.previousState);
-        onComplete();
-      }
-    });
+    runStep(0);
   }
 
   private executeAttack(attacker: Character, defender: Character, onComplete?: () => void) {
@@ -2046,9 +3187,9 @@ export class GameScene extends Phaser.Scene {
     const dx = defender.x - attacker.x;
     const dy = defender.y - attacker.y;
     if (Math.abs(dx) > Math.abs(dy)) {
-      attacker.direction = dx > 0 ? 'NE' : 'SW';
+      attacker.direction = dx > 0 ? 'SE' : 'NW';
     } else if (Math.abs(dy) > Math.abs(dx)) {
-      attacker.direction = dy > 0 ? 'SE' : 'NW';
+      attacker.direction = dy > 0 ? 'SW' : 'NE';
     }
     this.updateDirectionVisual(attacker);
     
@@ -2081,13 +3222,13 @@ export class GameScene extends Phaser.Scene {
         {
           x: lungeX,
           y: lungeY,
-          duration: 150,
+          duration: 150 * this.animationSpeedMultiplier,
           ease: 'Quad.easeOut'
         },
         {
           x: startPos.x,
           y: startPos.y,
-          duration: 200,
+          duration: 200 * this.animationSpeedMultiplier,
           ease: 'Quad.easeInOut'
         }
       ],
@@ -2122,7 +3263,7 @@ export class GameScene extends Phaser.Scene {
       targets: proj,
       x: targetPos.x,
       y: targetPos.y - 25,
-      duration: 350,
+      duration: 350 * this.animationSpeedMultiplier,
       ease: 'Cubic.easeOut',
       onComplete: () => {
         // Expansion explosion splash
@@ -2131,7 +3272,7 @@ export class GameScene extends Phaser.Scene {
           scaleX: 3,
           scaleY: 3,
           alpha: 0,
-          duration: 150,
+          duration: 150 * this.animationSpeedMultiplier,
           onComplete: () => {
             proj.destroy();
           }
@@ -2157,6 +3298,12 @@ export class GameScene extends Phaser.Scene {
     else if (defender.direction === 'NW' && attacker.y > defender.y) isBackAttack = true;
 
     let damage = attacker.isEnemy ? Phaser.Math.Between(10, 16) : Phaser.Math.Between(18, 26);
+    if (attacker.isEnemy) {
+      const chapterNum = Math.floor(this.currentStageIndex / 3) + 1;
+      const stageNumWithinChapter = (this.currentStageIndex % 3) + 1;
+      const difficultyMultiplier = 1.0 + (chapterNum - 1) * 0.25 + (stageNumWithinChapter - 1) * 0.15;
+      damage = Math.floor(damage * difficultyMultiplier);
+    }
     if (isBackAttack) {
       damage = Math.floor(damage * 1.5);
     }
@@ -2175,11 +3322,11 @@ export class GameScene extends Phaser.Scene {
       targets: defender.gameObject,
       x: defender.gameObject.x + (attacker.x < defender.x ? 8 : -8),
       y: defender.gameObject.y + (attacker.y < defender.y ? 4 : -4),
-      duration: 50,
+      duration: 50 * this.animationSpeedMultiplier,
       yoyo: true,
       repeat: 2,
       onStart: () => {
-        this.cameras.main.flash(50, 239, 68, 68, false);
+        this.cameras.main.flash(50 * this.animationSpeedMultiplier, 239, 68, 68, false);
       }
     });
 
@@ -2188,7 +3335,7 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private showDamagePopup(target: Phaser.GameObjects.Container, damage: number, isBackAttack = false) {
+  private showDamagePopup(target: Phaser.GameObjects.Container, damage: number, isBackAttack = false, customColor?: string) {
     const depth = target.depth + 100;
 
     if (isBackAttack) {
@@ -2215,10 +3362,17 @@ export class GameScene extends Phaser.Scene {
     }
 
     // Standard/Modified damage popup
+    let textColor = '#ef4444';
+    if (customColor) {
+      textColor = customColor;
+    } else if (isBackAttack) {
+      textColor = '#fbbf24';
+    }
+
     const popupText = this.add.text(target.x, target.y - 65, `-${damage}`, {
       fontFamily: 'DungGeunMo, Pixelify Sans, monospace',
       fontSize: isBackAttack ? '25px' : '22px',
-      color: isBackAttack ? '#fbbf24' : '#ef4444', // yellow orange for back attack
+      color: textColor,
       stroke: '#000000',
       strokeThickness: isBackAttack ? 5 : 4,
       align: 'center'
@@ -2261,35 +3415,51 @@ export class GameScene extends Phaser.Scene {
     const livingEnemies = this.characters.filter(c => c.isEnemy && c.hp > 0);
 
     if (livingEnemies.length === 0) {
-      this.triggerEndGame('VICTORY', '#10b981');
+      if (this.currentStageIndex === STAGE_PRESETS.length - 1) {
+        this.triggerEndGame('COMPLETE');
+      } else {
+        this.triggerEndGame('VICTORY');
+      }
     } else if (livingPlayers.length === 0) {
-      this.triggerEndGame('DEFEAT', '#ef4444');
+      this.triggerEndGame('DEFEAT');
     }
   }
 
-  private triggerEndGame(result: string, color: string) {
+  private triggerEndGame(result: 'VICTORY' | 'DEFEAT' | 'COMPLETE') {
     this.isGameOver = true;
     this.clearTurnTimer();
-    
-    const gameOverText = this.add.text(
-      this.cameras.main.width / 2,
-      this.cameras.main.height / 2,
-      result,
-      {
-        fontFamily: 'Orbit, sans-serif',
-        fontSize: '64px',
-        color: color,
-        stroke: '#090d16',
-        strokeThickness: 8,
-        align: 'center'
+    this.updateActionButtonStates();
+
+    const overlay = document.getElementById('stage-clear-overlay');
+    const title = document.getElementById('modal-title');
+    const desc = document.getElementById('modal-desc');
+    const btn = document.getElementById('btn-next-stage');
+
+    if (overlay && title && desc && btn) {
+      overlay.classList.remove('hidden');
+      
+      if (result === 'VICTORY') {
+        title.innerText = 'STAGE CLEAR';
+        title.style.color = '#10b981';
+        title.style.textShadow = '0 0 15px rgba(16, 185, 129, 0.6)';
+        desc.innerText = `${STAGE_PRESETS[this.currentStageIndex].name} 완료!\n다음 여정에 나설 준비가 되었습니다.`;
+        btn.innerText = '다음 스테이지로';
+      } else if (result === 'COMPLETE') {
+        title.innerText = 'GAME CLEAR!';
+        title.style.color = '#facc15';
+        title.style.textShadow = '0 0 20px rgba(250, 204, 21, 0.7)';
+        desc.innerText = '축하합니다! 고블린 주술사의 요새를 완파하고\n모든 모험을 성공적으로 마쳤습니다!';
+        btn.innerText = '처음부터 다시하기';
+      } else if (result === 'DEFEAT') {
+        title.innerText = 'DEFEAT';
+        title.style.color = '#ef4444';
+        title.style.textShadow = '0 0 15px rgba(239, 68, 68, 0.6)';
+        desc.innerText = '아군이 모두 쓰러졌습니다.\n전략을 재정비하여 다시 도전하세요.';
+        btn.innerText = '스테이지 재도전';
       }
-    );
-    gameOverText.setOrigin(0.5);
-    gameOverText.setDepth(1000);
-    gameOverText.setScrollFactor(0);
+    }
 
     this.showDialogue('SYSTEM', `전투가 종료되었습니다. 결과: ${result}`, 3500);
-    this.updateActionButtonStates();
   }
 
   private runAllEnemiesAI() {
@@ -2345,6 +3515,49 @@ export class GameScene extends Phaser.Scene {
       });
 
       // Define sequential AI behavior steps
+      const attemptSpell = (afterSpellCallback: () => void) => {
+        if (this.isGameOver || enemy.hp <= 0) {
+          afterSpellCallback();
+          return;
+        }
+        const chosenSelfHealIdx = enemy.spells.findIndex(s => s.effectType === 'heal');
+        if (chosenSelfHealIdx !== -1) {
+          const healSpell = enemy.spells[chosenSelfHealIdx];
+          const canHeal = enemy.mp >= healSpell.cost && enemy.ap > 0 && !enemy.hasAttackedThisTurn;
+          const hpRatio = enemy.hp / enemy.maxHp;
+          if (canHeal && hpRatio <= 0.6) {
+            this.executeSpell(enemy, { x: enemy.x, y: enemy.y }, chosenSelfHealIdx);
+            this.time.delayedCall(1200 * this.animationSpeedMultiplier, () => {
+              afterSpellCallback();
+            });
+            return;
+          }
+        }
+
+        let chosenSpellIndex = -1;
+        let bestCost = -1;
+        for (let i = 0; i < enemy.spells.length; i++) {
+          const s = enemy.spells[i];
+          if (s.effectType === 'damage' && enemy.mp >= s.cost) {
+            if (this.isCoordSpellRange(enemy, closestPlayer.x, closestPlayer.y, i)) {
+              if (s.cost > bestCost) {
+                bestCost = s.cost;
+                chosenSpellIndex = i;
+              }
+            }
+          }
+        }
+
+        if (chosenSpellIndex !== -1 && enemy.ap > 0 && !enemy.hasAttackedThisTurn) {
+          this.executeSpell(enemy, { x: closestPlayer.x, y: closestPlayer.y }, chosenSpellIndex);
+          this.time.delayedCall(1200 * this.animationSpeedMultiplier, () => {
+            afterSpellCallback();
+          });
+        } else {
+          afterSpellCallback();
+        }
+      };
+
       const attemptAttack = (afterAttackCallback: () => void) => {
         if (this.isGameOver || enemy.hp <= 0) {
           afterAttackCallback();
@@ -2370,9 +3583,12 @@ export class GameScene extends Phaser.Scene {
           return;
         }
 
-        // Already in straight line attack range, skip movement to conserve position
+        // Already in straight line attack range or spell range, skip movement to conserve position
         const canAttackNow = this.isCoordAttackable(enemy, closestPlayer.x, closestPlayer.y);
-        if (canAttackNow) {
+        const canSpellNow = enemy.spells.some((s, idx) => 
+          enemy.mp >= s.cost && this.isCoordSpellRange(enemy, closestPlayer.x, closestPlayer.y, idx)
+        );
+        if (canAttackNow || canSpellNow) {
           afterMoveCallback();
           return;
         }
@@ -2387,18 +3603,19 @@ export class GameScene extends Phaser.Scene {
         );
 
         if (path.length > 2) {
-          // Find the best landing spot along the path that puts us in range
           let walkTargetIndex = path.length - 1;
           for (let i = 0; i < path.length; i++) {
-            // Must evaluate isCoordAttackable from simulated tile positions
             const simulatedEnemyPos: Character = { ...enemy, x: path[i].x, y: path[i].y };
-            if (this.isCoordAttackable(simulatedEnemyPos, closestPlayer.x, closestPlayer.y)) {
+            const canAttackFromSim = this.isCoordAttackable(simulatedEnemyPos, closestPlayer.x, closestPlayer.y);
+            const canSpellFromSim = enemy.spells.some((s, idx) => 
+              enemy.mp >= s.cost && this.isCoordSpellRange(simulatedEnemyPos, closestPlayer.x, closestPlayer.y, idx)
+            );
+            if (canAttackFromSim || canSpellFromSim) {
               walkTargetIndex = i;
               break;
             }
           }
 
-          // Clamp index by moveRange
           const maxMoveIndex = Math.min(enemy.moveRange, walkTargetIndex);
           if (maxMoveIndex > 0) {
             const actualPath = path.slice(0, maxMoveIndex + 1);
@@ -2428,14 +3645,19 @@ export class GameScene extends Phaser.Scene {
       };
 
       // Execution Pipeline:
-      // Step 1: Try to attack first (e.g. if player is already nearby)
-      attemptAttack(() => {
-        // Step 2: Try to move closer if not yet in range
-        attemptMovement(() => {
-          // Step 3: Try to attack again after movement (if AP is left and didn't attack yet)
-          attemptAttack(() => {
-            // Step 4: Finished all actions
-            onComplete();
+      // Step 1: Try to cast spell first
+      attemptSpell(() => {
+        // Step 2: Try to attack next (melee/ranged physical)
+        attemptAttack(() => {
+          // Step 3: Try to move closer if not yet in range
+          attemptMovement(() => {
+            // Step 4: Try to cast spell again after movement
+            attemptSpell(() => {
+              // Step 5: Try to attack again after movement
+              attemptAttack(() => {
+                onComplete();
+              });
+            });
           });
         });
       });
@@ -2514,8 +3736,8 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    this.interactiveGraphics.lineStyle(2, color, 1);
-    this.interactiveGraphics.fillStyle(color, 0.15);
+    this.interactiveGraphics.lineStyle(2.5, color, 0.9);
+    this.interactiveGraphics.fillStyle(color, 0.3);
 
     this.interactiveGraphics.beginPath();
     this.interactiveGraphics.moveTo(screenPos.x, screenPos.y - this.halfTileHeight);
@@ -2535,7 +3757,6 @@ export class GameScene extends Phaser.Scene {
 
     for (let y = 0; y < this.gridHeight; y++) {
       for (let x = 0; x < this.gridWidth; x++) {
-        // Manhattan distance pre-filtering for performance
         const dist = Math.abs(x - this.selectedCharacter.x) + Math.abs(y - this.selectedCharacter.y);
         if (dist > this.selectedCharacter.moveRange) continue;
         if (x === this.selectedCharacter.x && y === this.selectedCharacter.y) continue;
@@ -2553,8 +3774,9 @@ export class GameScene extends Phaser.Scene {
 
         if (path.length > 1 && path.length - 1 <= this.selectedCharacter.moveRange) {
           const screenPos = this.gridToScreen(x, y);
-          this.interactiveGraphics.fillStyle(0x10b981, 0.08);
-          this.interactiveGraphics.lineStyle(1, 0x10b981, 0.25);
+          // Neon Sky Blue
+          this.interactiveGraphics.fillStyle(0x00d2ff, 0.35);
+          this.interactiveGraphics.lineStyle(2.5, 0x00d2ff, 0.85);
           
           this.interactiveGraphics.beginPath();
           this.interactiveGraphics.moveTo(screenPos.x, screenPos.y - this.halfTileHeight);
@@ -2577,11 +3799,11 @@ export class GameScene extends Phaser.Scene {
 
     for (let y = 0; y < this.gridHeight; y++) {
       for (let x = 0; x < this.gridWidth; x++) {
-        // Enforce straight and unblocked line-of-sight checks
         if (this.isCoordAttackable(char, x, y)) {
           const screenPos = this.gridToScreen(x, y);
-          this.interactiveGraphics.fillStyle(0xef4444, 0.08);
-          this.interactiveGraphics.lineStyle(1, 0xef4444, 0.25);
+          // Neon Hot Pink
+          this.interactiveGraphics.fillStyle(0xff0077, 0.38);
+          this.interactiveGraphics.lineStyle(2.5, 0xff0077, 0.85);
           
           this.interactiveGraphics.beginPath();
           this.interactiveGraphics.moveTo(screenPos.x, screenPos.y - this.halfTileHeight);
@@ -2597,38 +3819,98 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private drawDirectionSelectHighlight() {
-    if (!this.isDirectionSelectMode || !this.selectedCharacter || this.selectedCharacter.isEnemy || this.isGameOver) return;
-    
-    const char = this.selectedCharacter;
-
-    // Draw yellow highlights along horizontal & vertical lines all the way across the grid (excluding the char itself)
-    for (let x = 0; x < this.gridWidth; x++) {
-      if (x === char.x) continue;
-      const screenPos = this.gridToScreen(x, char.y);
-      this.drawYellowSelectTile(screenPos);
-    }
-    
-    for (let y = 0; y < this.gridHeight; y++) {
-      if (y === char.y) continue;
-      const screenPos = this.gridToScreen(char.x, y);
-      this.drawYellowSelectTile(screenPos);
-    }
+  private isCoordSpellRange(char: Character, tx: number, ty: number, spellIndex: number = this.selectedSpellIndex): boolean {
+    const spell = char.spells[spellIndex];
+    if (!spell) return false;
+    const dist = Math.abs(tx - char.x) + Math.abs(ty - char.y);
+    return dist >= spell.rangeMin && dist <= spell.rangeMax;
   }
 
-  private drawYellowSelectTile(screenPos: Point) {
-    this.interactiveGraphics.fillStyle(0xfacc15, 0.08);
-    this.interactiveGraphics.lineStyle(1.5, 0xfacc15, 0.35);
-    
-    this.interactiveGraphics.beginPath();
-    this.interactiveGraphics.moveTo(screenPos.x, screenPos.y - this.halfTileHeight);
-    this.interactiveGraphics.lineTo(screenPos.x + this.halfTileWidth, screenPos.y);
-    this.interactiveGraphics.lineTo(screenPos.x, screenPos.y + this.halfTileHeight);
-    this.interactiveGraphics.lineTo(screenPos.x - this.halfTileWidth, screenPos.y);
-    this.interactiveGraphics.closePath();
-    
-    this.interactiveGraphics.fillPath();
-    this.interactiveGraphics.strokePath();
+  private drawSpellRangeHighlight() {
+    if (!this.isSpellMode || !this.selectedCharacter || this.selectedCharacter.isEnemy || this.turnManager.getState() !== 'PLAYER_TURN' || this.isGameOver) return;
+
+    const char = this.selectedCharacter;
+
+    // 1. Draw spell casting range (Purple or Green neon grids)
+    const spell = char.spells[this.selectedSpellIndex];
+    if (!spell) return;
+
+    const isHealing = spell.effectType === 'heal';
+    const rangeColor = isHealing ? 0x10b981 : 0xcc33ff;
+
+    for (let y = 0; y < this.gridHeight; y++) {
+      for (let x = 0; x < this.gridWidth; x++) {
+        if (this.isCoordSpellRange(char, x, y)) {
+          const screenPos = this.gridToScreen(x, y);
+          this.interactiveGraphics.fillStyle(rangeColor, 0.28);
+          this.interactiveGraphics.lineStyle(2.0, rangeColor, 0.75);
+          
+          this.interactiveGraphics.beginPath();
+          this.interactiveGraphics.moveTo(screenPos.x, screenPos.y - this.halfTileHeight);
+          this.interactiveGraphics.lineTo(screenPos.x + this.halfTileWidth, screenPos.y);
+          this.interactiveGraphics.lineTo(screenPos.x, screenPos.y + this.halfTileHeight);
+          this.interactiveGraphics.lineTo(screenPos.x - this.halfTileWidth, screenPos.y);
+          this.interactiveGraphics.closePath();
+          
+          this.interactiveGraphics.fillPath();
+          this.interactiveGraphics.strokePath();
+        }
+      }
+    }
+
+    // 2. Draw Element Splash targeting hover preview (Neon red splash indicator)
+    if (this.hoverTile && this.isCoordSpellRange(char, this.hoverTile.x, this.hoverTile.y)) {
+      const hx = this.hoverTile.x;
+      const hy = this.hoverTile.y;
+      const splashTiles: Point[] = [];
+
+      if (spell.type === 'AoE') {
+        splashTiles.push({ x: hx, y: hy });
+        splashTiles.push({ x: hx + 1, y: hy });
+        splashTiles.push({ x: hx - 1, y: hy });
+        splashTiles.push({ x: hx, y: hy + 1 });
+        splashTiles.push({ x: hx, y: hy - 1 });
+      } else if (spell.type === 'Line') {
+        const dx = hx - char.x;
+        const dy = hy - char.y;
+        if (dx === 0 || dy === 0) {
+          const stepX = Math.sign(dx);
+          const stepY = Math.sign(dy);
+          let cx = char.x + stepX;
+          let cy = char.y + stepY;
+          while (true) {
+            splashTiles.push({ x: cx, y: cy });
+            if (cx === hx && cy === hy) break;
+            cx += stepX;
+            cy += stepY;
+          }
+        } else {
+          splashTiles.push({ x: hx, y: hy });
+        }
+      } else {
+        splashTiles.push({ x: hx, y: hy });
+      }
+
+      const splashColor = isHealing ? 0x00ff88 : 0xff0055;
+
+      splashTiles.forEach(tile => {
+        if (tile.x >= 0 && tile.x < this.gridWidth && tile.y >= 0 && tile.y < this.gridHeight) {
+          const screenPos = this.gridToScreen(tile.x, tile.y);
+          this.interactiveGraphics.fillStyle(splashColor, 0.45);
+          this.interactiveGraphics.lineStyle(2.5, splashColor, 0.95);
+          
+          this.interactiveGraphics.beginPath();
+          this.interactiveGraphics.moveTo(screenPos.x, screenPos.y - this.halfTileHeight);
+          this.interactiveGraphics.lineTo(screenPos.x + this.halfTileWidth, screenPos.y);
+          this.interactiveGraphics.lineTo(screenPos.x, screenPos.y + this.halfTileHeight);
+          this.interactiveGraphics.lineTo(screenPos.x - this.halfTileWidth, screenPos.y);
+          this.interactiveGraphics.closePath();
+          
+          this.interactiveGraphics.fillPath();
+          this.interactiveGraphics.strokePath();
+        }
+      });
+    }
   }
 
   private drawSelectionRing() {

@@ -53,6 +53,12 @@ export class TurnManager {
     this.setState('PLAYER_TURN');
   }
 
+  public reset() {
+    this.currentState = 'PLAYER_TURN';
+    this.currentTurnNumber = 1;
+    this.notifySubscribers();
+  }
+
   private notifySubscribers() {
     this.onStateChangeCallbacks.forEach(cb => cb(this.currentState, this.currentTurnNumber));
   }
