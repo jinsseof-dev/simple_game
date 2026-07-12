@@ -34,6 +34,7 @@ interface Character {
   burnTurns: number;
   stunTurns: number;
   poisonTurns: number;
+  bonusDmg: number;
 }
 
 interface SpellConfig {
@@ -46,6 +47,83 @@ interface SpellConfig {
   debuffType?: 'burn' | 'stun' | 'poison';
 }
 
+interface Item {
+  id: string;
+  name: string;
+  type: 'weapon' | 'armor';
+  classLimit: 'warrior' | 'mage' | 'archer' | 'cleric' | 'rogue';
+  dmgBonus: number;
+  hpBonus: number;
+}
+
+const EQUIPMENT_DATABASE: Item[] = [
+  // Warrior Weapons
+  { id: 'w_w1', name: '청동 대검', type: 'weapon', classLimit: 'warrior', dmgBonus: 6, hpBonus: 0 },
+  { id: 'w_w2', name: '강철 바스타드', type: 'weapon', classLimit: 'warrior', dmgBonus: 12, hpBonus: 0 },
+  { id: 'w_w3', name: '룬 그레이트소드', type: 'weapon', classLimit: 'warrior', dmgBonus: 20, hpBonus: 0 },
+  { id: 'w_w4', name: '드래곤 슬레이어', type: 'weapon', classLimit: 'warrior', dmgBonus: 30, hpBonus: 0 },
+  { id: 'w_w5', name: '성검 아론다이트', type: 'weapon', classLimit: 'warrior', dmgBonus: 45, hpBonus: 0 },
+  // Warrior Armors
+  { id: 'w_a1', name: '사슬 갑옷', type: 'armor', classLimit: 'warrior', dmgBonus: 0, hpBonus: 20 },
+  { id: 'w_a2', name: '판금 갑옷', type: 'armor', classLimit: 'warrior', dmgBonus: 0, hpBonus: 40 },
+  { id: 'w_a3', name: '미스릴 갑옷', type: 'armor', classLimit: 'warrior', dmgBonus: 0, hpBonus: 70 },
+  { id: 'w_a4', name: '드래곤 스케일', type: 'armor', classLimit: 'warrior', dmgBonus: 0, hpBonus: 110 },
+  { id: 'w_a5', name: '천상의 신성 갑옷', type: 'armor', classLimit: 'warrior', dmgBonus: 0, hpBonus: 160 },
+
+  // Mage Weapons
+  { id: 'm_w1', name: '견습 마법봉', type: 'weapon', classLimit: 'mage', dmgBonus: 8, hpBonus: 0 },
+  { id: 'm_w2', name: '현자의 지팡이', type: 'weapon', classLimit: 'mage', dmgBonus: 16, hpBonus: 0 },
+  { id: 'm_w3', name: '비전 대마도서', type: 'weapon', classLimit: 'mage', dmgBonus: 26, hpBonus: 0 },
+  { id: 'm_w4', name: '원소의 구체', type: 'weapon', classLimit: 'mage', dmgBonus: 38, hpBonus: 0 },
+  { id: 'm_w5', name: '대마도사의 파멸 지팡이', type: 'weapon', classLimit: 'mage', dmgBonus: 55, hpBonus: 0 },
+  // Mage Armors
+  { id: 'm_a1', name: '마법 학도 로브', type: 'armor', classLimit: 'mage', dmgBonus: 0, hpBonus: 15 },
+  { id: 'm_a2', name: '룬 로브', type: 'armor', classLimit: 'mage', dmgBonus: 0, hpBonus: 30 },
+  { id: 'm_a3', name: '아스트랄 가브', type: 'armor', classLimit: 'mage', dmgBonus: 0, hpBonus: 55 },
+  { id: 'm_a4', name: '원소 엘리멘탈 로브', type: 'armor', classLimit: 'mage', dmgBonus: 0, hpBonus: 90 },
+  { id: 'm_a5', name: '별빛 성운 의복', type: 'armor', classLimit: 'mage', dmgBonus: 0, hpBonus: 130 },
+
+  // Archer Weapons
+  { id: 'a_w1', name: '합성궁', type: 'weapon', classLimit: 'archer', dmgBonus: 7, hpBonus: 0 },
+  { id: 'a_w2', name: '장궁 윈드포스', type: 'weapon', classLimit: 'archer', dmgBonus: 14, hpBonus: 0 },
+  { id: 'a_w3', name: '발리스타 크로스보우', type: 'weapon', classLimit: 'archer', dmgBonus: 23, hpBonus: 0 },
+  { id: 'a_w4', name: '신성한 요정 궁', type: 'weapon', classLimit: 'archer', dmgBonus: 34, hpBonus: 0 },
+  { id: 'a_w5', name: '아폴론의 성궁', type: 'weapon', classLimit: 'archer', dmgBonus: 50, hpBonus: 0 },
+  // Archer Armors
+  { id: 'a_a1', name: '가죽 갑옷', type: 'armor', classLimit: 'archer', dmgBonus: 0, hpBonus: 18 },
+  { id: 'a_a2', name: '강화 가죽 가브', type: 'armor', classLimit: 'archer', dmgBonus: 0, hpBonus: 35 },
+  { id: 'a_a3', name: '질풍의 가죽 재킷', type: 'armor', classLimit: 'archer', dmgBonus: 0, hpBonus: 60 },
+  { id: 'a_a4', name: '샤도우 스텔스 갑옷', type: 'armor', classLimit: 'archer', dmgBonus: 0, hpBonus: 100 },
+  { id: 'a_a5', name: '바람 정령의 조끼', type: 'armor', classLimit: 'archer', dmgBonus: 0, hpBonus: 145 },
+
+  // Cleric Weapons
+  { id: 'c_w1', name: '낡은 메이스', type: 'weapon', classLimit: 'cleric', dmgBonus: 5, hpBonus: 0 },
+  { id: 'c_w2', name: '신성한 망치', type: 'weapon', classLimit: 'cleric', dmgBonus: 10, hpBonus: 0 },
+  { id: 'c_w3', name: '은빛 기도서', type: 'weapon', classLimit: 'cleric', dmgBonus: 17, hpBonus: 0 },
+  { id: 'c_w4', name: '자비의 크로스 스태프', type: 'weapon', classLimit: 'cleric', dmgBonus: 27, hpBonus: 0 },
+  { id: 'c_w5', name: '천사 가브리엘의 홀', type: 'weapon', classLimit: 'cleric', dmgBonus: 40, hpBonus: 0 },
+  // Cleric Armors
+  { id: 'c_a1', name: '성직자 의복', type: 'armor', classLimit: 'cleric', dmgBonus: 0, hpBonus: 16 },
+  { id: 'c_a2', name: '신성 로브', type: 'armor', classLimit: 'cleric', dmgBonus: 0, hpBonus: 32 },
+  { id: 'c_a3', name: '빛의 성의', type: 'armor', classLimit: 'cleric', dmgBonus: 0, hpBonus: 58 },
+  { id: 'c_a4', name: '대천사의 수호 로브', type: 'armor', classLimit: 'cleric', dmgBonus: 0, hpBonus: 95 },
+  { id: 'c_a5', name: '생명의 신전 갑옷', type: 'armor', classLimit: 'cleric', dmgBonus: 0, hpBonus: 140 },
+
+  // Rogue Weapons
+  { id: 'r_w1', name: '무쇠 단검', type: 'weapon', classLimit: 'rogue', dmgBonus: 7, hpBonus: 0 },
+  { id: 'r_w2', name: '암살자의 대거', type: 'weapon', classLimit: 'rogue', dmgBonus: 14, hpBonus: 0 },
+  { id: 'r_w3', name: '포이즌 크리스', type: 'weapon', classLimit: 'rogue', dmgBonus: 22, hpBonus: 0 },
+  { id: 'r_w4', name: '섀도우 블레이드', type: 'weapon', classLimit: 'rogue', dmgBonus: 33, hpBonus: 0 },
+  { id: 'r_w5', name: '속삭이는 바람 단검', type: 'weapon', classLimit: 'rogue', dmgBonus: 48, hpBonus: 0 },
+  // Rogue Armors
+  { id: 'r_a1', name: '누비 옷', type: 'armor', classLimit: 'rogue', dmgBonus: 0, hpBonus: 15 },
+  { id: 'r_a2', name: '자객 슈트', type: 'armor', classLimit: 'rogue', dmgBonus: 0, hpBonus: 30 },
+  { id: 'r_a3', name: '밤의 스텔스 가브', type: 'armor', classLimit: 'rogue', dmgBonus: 0, hpBonus: 50 },
+  { id: 'r_a4', name: '어둠 추적자 조끼', type: 'armor', classLimit: 'rogue', dmgBonus: 0, hpBonus: 85 },
+  { id: 'r_a5', name: '심연의 그림자 가죽', type: 'armor', classLimit: 'rogue', dmgBonus: 0, hpBonus: 125 }
+];
+
+
 
 
 export class GameScene extends Phaser.Scene {
@@ -54,6 +132,7 @@ export class GameScene extends Phaser.Scene {
   private pedestalStyle: 'standee' | 'chess' | 'hexagon' = 'hexagon';
   private currentStageIndex = 0;
   private mapObjects: Phaser.GameObjects.GameObject[] = [];
+  private fieldItems: { x: number; y: number; item: Item; gameObject: Phaser.GameObjects.GameObject }[] = [];
 
   // Camera panning control variables
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -100,6 +179,28 @@ export class GameScene extends Phaser.Scene {
   private isSpellMode = false;
   private selectedSpellIndex = 0; // 0 = Skill 1, 1 = Skill 2
   private isGameOver = false;
+
+  // Persistent Character Growth Academy State
+  private trainingSpheres = 0;
+  private allyGrowthStats: Record<string, {
+    bonusHp: number;
+    bonusDmg: number;
+    bonusMove: number;
+    bonusMp: number;
+    equippedWeapon: Item | null;
+    equippedArmor: Item | null;
+  }> = {
+    warrior: { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null },
+    mage: { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null },
+    archer: { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null },
+    cleric: { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null },
+    rogue: { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null }
+  };
+
+  private sharedInventory: Item[] = [];
+  private selectedAcademyHeroKey = 'warrior';
+
+  private endgameResult: 'VICTORY' | 'DEFEAT' | 'COMPLETE' = 'VICTORY';
 
   // Direction Selection Mode
   private isDirectionSelectMode = false;
@@ -1078,6 +1179,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.mapObjects.forEach(obj => obj.destroy());
     this.mapObjects = [];
+    this.fieldItems = [];
 
     // 2. Set grid configuration dynamically based on stage index
     this.gridWidth = 10 + (this.currentStageIndex % 3) * 3;
@@ -1092,6 +1194,7 @@ export class GameScene extends Phaser.Scene {
 
     // 5. Load units
     this.createCharactersFromPreset(stage);
+    this.spawnFieldItems();
 
     // 6. Reset turn manager and UI
     this.turnManager.reset();
@@ -1304,7 +1407,12 @@ export class GameScene extends Phaser.Scene {
         difficultyMultiplier = 1.0 + (chapterNum - 1) * 0.25 + (stageNumWithinChapter - 1) * 0.15;
       }
 
-      const finalMaxHp = spec.isEnemy ? Math.floor(spec.maxHp * difficultyMultiplier) : spec.maxHp;
+      const growth = !spec.isEnemy ? (this.allyGrowthStats[preset.type] || { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null }) : { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null };
+      const eqDmg = (growth.equippedWeapon ? growth.equippedWeapon.dmgBonus : 0);
+      const eqHp = (growth.equippedArmor ? growth.equippedArmor.hpBonus : 0);
+
+      const finalMaxHp = spec.isEnemy ? Math.floor(spec.maxHp * difficultyMultiplier) : (spec.maxHp + growth.bonusHp + eqHp);
+      const finalMaxMp = spec.maxMp + growth.bonusMp;
 
       const char: Character = {
         name: preset.name,
@@ -1312,14 +1420,14 @@ export class GameScene extends Phaser.Scene {
         y: spawnY,
         hp: finalMaxHp,
         maxHp: finalMaxHp,
-        mp: 0,
-        maxMp: spec.maxMp,
-        ap: spec.maxAp,
+        mp: finalMaxMp,
+        maxMp: finalMaxMp,
+        ap: 0,
         maxAp: spec.maxAp,
         avatar: spec.avatar,
         isEnemy: spec.isEnemy,
         gameObject: container,
-        moveRange: spec.moveRange,
+        moveRange: spec.moveRange + growth.bonusMove,
         minAttackRange: spec.minAttackRange,
         maxAttackRange: spec.maxAttackRange,
         hasMovedThisTurn: false,
@@ -1335,7 +1443,8 @@ export class GameScene extends Phaser.Scene {
         spells: spec.spells,
         burnTurns: 0,
         stunTurns: 0,
-        poisonTurns: 0
+        poisonTurns: 0,
+        bonusDmg: growth.bonusDmg + eqDmg
       };
 
       this.drawPedestal(char);
@@ -1359,6 +1468,48 @@ export class GameScene extends Phaser.Scene {
 
     this.updateCharacterPositions();
     this.characters.forEach(char => this.updateMiniHUDBar(char));
+  }
+
+  private spawnFieldItems() {
+    const isValidTile = (x: number, y: number) => {
+      if (x < 0 || x >= this.gridWidth || y < 0 || y >= this.gridHeight) return false;
+      if (this.cliffGrid[y][x] && !(this.bridgeGrid[y] && this.bridgeGrid[y][x])) return false;
+      if (this.obstacleGrid[y][x]) return false;
+      if (this.characters.some(c => c.x === x && c.y === y && c.hp > 0)) return false;
+      if (this.fieldItems.some(f => f.x === x && f.y === y)) return false;
+      return true;
+    };
+
+    for (let i = 0; i < 2; i++) {
+      let x = 0;
+      let y = 0;
+      let found = false;
+      for (let attempt = 0; attempt < 100; attempt++) {
+        x = Phaser.Math.Between(0, this.gridWidth - 1);
+        y = Phaser.Math.Between(0, this.gridHeight - 1);
+        if (isValidTile(x, y)) {
+          found = true;
+          break;
+        }
+      }
+      if (!found) continue;
+
+      const item = Phaser.Utils.Array.GetRandom(EQUIPMENT_DATABASE);
+      const { x: sx, y: sy } = this.gridToScreen(x, y);
+      const icon = this.add.text(sx, sy - 10, '🎁', { fontSize: '28px' }).setOrigin(0.5);
+      icon.setDepth(sy);
+      this.tweens.add({
+        targets: icon,
+        y: sy - 20,
+        duration: 600,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut'
+      });
+
+      this.mapObjects.push(icon);
+      this.fieldItems.push({ x, y, item, gameObject: icon });
+    }
   }
 
   private updateDirectionVisual(char: Character) {
@@ -1797,8 +1948,8 @@ export class GameScene extends Phaser.Scene {
         const spell1 = char.spells[0];
         const spell2 = char.spells[1];
 
-        const canUseSpell1 = spell1 && char.mp >= spell1.cost && char.ap > 0 && !char.hasAttackedThisTurn;
-        const canUseSpell2 = spell2 && char.mp >= spell2.cost && char.ap > 0 && !char.hasAttackedThisTurn;
+        const canUseSpell1 = spell1 && char.mp >= spell1.cost && char.ap >= spell1.cost && !char.hasAttackedThisTurn;
+        const canUseSpell2 = spell2 && char.mp >= spell2.cost && char.ap >= spell2.cost && !char.hasAttackedThisTurn;
 
         btnMove.disabled = char.hasMovedThisTurn || char.hasAttackedThisTurn;
         btnTurn.disabled = char.hasAttackedThisTurn; 
@@ -2421,13 +2572,11 @@ export class GameScene extends Phaser.Scene {
         
         this.isGameOver = false;
 
-        const livingEnemies = this.characters.filter(c => c.isEnemy && c.hp > 0);
-        if (livingEnemies.length === 0) {
-          if (this.currentStageIndex < STAGE_PRESETS.length - 1) {
-            this.loadStage(this.currentStageIndex + 1);
-          } else {
-            this.loadStage(0);
-          }
+        if (this.endgameResult === 'VICTORY') {
+          this.openAcademyModal();
+        } else if (this.endgameResult === 'COMPLETE') {
+          this.resetPermanentGrowth();
+          this.loadStage(0);
         } else {
           this.loadStage(this.currentStageIndex);
         }
@@ -2818,9 +2967,9 @@ export class GameScene extends Phaser.Scene {
     this.previousState = this.turnManager.getState();
     this.turnManager.setState('ANIMATING');
 
-    // Consume MP & AP
+    // Consume MP & AP (Consume AP/Cost based on spell cost)
     attacker.mp = Math.max(0, attacker.mp - spell.cost);
-    attacker.ap = Math.max(0, attacker.ap - 1);
+    attacker.ap = Math.max(0, attacker.ap - spell.cost);
     attacker.hasAttackedThisTurn = true;
 
     // Face targeting direction
@@ -2911,48 +3060,34 @@ export class GameScene extends Phaser.Scene {
     }
 
     // 2. Play elemental blast fx on each splash target cell
-    const isEnemy = attacker.isEnemy;
+
     const isHealing = spell && spell.effectType === 'heal';
     
-    let beamColor = isEnemy ? 0xff4500 : 0x00ffff; // Fire red or Lightning cyan
-    if (isHealing) {
-      beamColor = 0x10b981; // Emerald green healing beam
-    }
 
+
+    // 2. Play beautiful custom signature spell visual fx on each target cell
     splashTiles.forEach(tile => {
       if (tile.x >= 0 && tile.x < this.gridWidth && tile.y >= 0 && tile.y < this.gridHeight) {
         const cellPos = this.gridToScreen(tile.x, tile.y);
-        const beam = this.add.graphics();
-        beam.setPosition(cellPos.x, cellPos.y);
-        beam.setDepth(cellPos.y + 100);
-
-        beam.fillStyle(beamColor, 0.85);
-        beam.beginPath();
-        beam.moveTo(-16, -180);
-        beam.lineTo(16, -180);
-        beam.lineTo(24, 0);
-        beam.lineTo(-24, 0);
-        beam.closePath();
-        beam.fillPath();
-
-        beam.fillStyle(0xffffff, 0.95);
-        beam.beginPath();
-        beam.moveTo(-6, -180);
-        beam.lineTo(6, -180);
-        beam.lineTo(10, 0);
-        beam.lineTo(-10, 0);
-        beam.closePath();
-        beam.fillPath();
-
-        this.tweens.add({
-          targets: beam,
-          alpha: 0,
-          scaleX: 1.5,
-          duration: 350 * this.animationSpeedMultiplier,
-          onComplete: () => {
-            beam.destroy();
-          }
-        });
+        
+        if (isHealing) {
+          this.createHealSpellFX(cellPos.x, cellPos.y);
+        } else if (spell && spell.debuffType === 'burn') {
+          this.createFireSpellFX(cellPos.x, cellPos.y);
+        } else if (spell && spell.debuffType === 'stun') {
+          this.createLightningSpellFX(cellPos.x, cellPos.y);
+        } else if (spell && spell.debuffType === 'poison') {
+          this.createPoisonSpellFX(cellPos.x, cellPos.y);
+        } else if (spell && spell.name === '윈드 피어스') {
+          const dx = Math.sign(tile.x - attacker.x);
+          const dy = Math.sign(tile.y - attacker.y);
+          this.createWindSpellFX(cellPos.x, cellPos.y, dx, dy);
+        } else if (spell && spell.name === '프로스트 레이') {
+          this.createIceSpellFX(cellPos.x, cellPos.y);
+        } else {
+          // Default generic fallback
+          this.createLightningSpellFX(cellPos.x, cellPos.y);
+        }
       }
     });
 
@@ -3006,7 +3141,7 @@ export class GameScene extends Phaser.Scene {
         return;
       }
 
-      const baseDamage = attacker.isEnemy ? 25 : 36;
+      const baseDamage = attacker.isEnemy ? 25 : (36 + (attacker.bonusDmg || 0));
       const finalDamage = Math.floor(baseDamage * (0.9 + Math.random() * 0.2));
 
       defender.hp = Math.max(0, defender.hp - finalDamage);
@@ -3166,6 +3301,9 @@ export class GameScene extends Phaser.Scene {
         onComplete: () => {
           char.x = step.x;
           char.y = step.y;
+          if (!char.isEnemy) {
+            this.tryPickupFieldItem(char);
+          }
           char.gameObject.setDepth(screenPos.y + 10);
           runStep(index + 1);
         }
@@ -3173,6 +3311,16 @@ export class GameScene extends Phaser.Scene {
     };
 
     runStep(0);
+  }
+
+  private tryPickupFieldItem(char: Character) {
+    const idx = this.fieldItems.findIndex(f => f.x === char.x && f.y === char.y);
+    if (idx === -1) return;
+    const matched = this.fieldItems[idx];
+    this.sharedInventory.push(matched.item);
+    matched.gameObject.destroy();
+    this.fieldItems.splice(idx, 1);
+    this.showDialogue(char.name, `[${matched.item.name}] 획득!`, 1200);
   }
 
   private executeAttack(attacker: Character, defender: Character, onComplete?: () => void) {
@@ -3297,7 +3445,7 @@ export class GameScene extends Phaser.Scene {
     else if (defender.direction === 'SW' && attacker.x > defender.x) isBackAttack = true;
     else if (defender.direction === 'NW' && attacker.y > defender.y) isBackAttack = true;
 
-    let damage = attacker.isEnemy ? Phaser.Math.Between(10, 16) : Phaser.Math.Between(18, 26);
+    let damage = attacker.isEnemy ? Phaser.Math.Between(10, 16) : (Phaser.Math.Between(18, 26) + (attacker.bonusDmg || 0));
     if (attacker.isEnemy) {
       const chapterNum = Math.floor(this.currentStageIndex / 3) + 1;
       const stageNumWithinChapter = (this.currentStageIndex % 3) + 1;
@@ -3426,9 +3574,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   private triggerEndGame(result: 'VICTORY' | 'DEFEAT' | 'COMPLETE') {
+    if (this.isGameOver) return;
     this.isGameOver = true;
     this.clearTurnTimer();
     this.updateActionButtonStates();
+    this.endgameResult = result;
+
+    if (result === 'VICTORY') {
+      this.trainingSpheres += 3;
+    }
 
     const overlay = document.getElementById('stage-clear-overlay');
     const title = document.getElementById('modal-title');
@@ -3442,14 +3596,14 @@ export class GameScene extends Phaser.Scene {
         title.innerText = 'STAGE CLEAR';
         title.style.color = '#10b981';
         title.style.textShadow = '0 0 15px rgba(16, 185, 129, 0.6)';
-        desc.innerText = `${STAGE_PRESETS[this.currentStageIndex].name} 완료!\n다음 여정에 나설 준비가 되었습니다.`;
-        btn.innerText = '다음 스테이지로';
+        desc.innerText = `${STAGE_PRESETS[this.currentStageIndex].name} 완료!\n보상으로 훈련 스피어 🌟 3개를 획득했습니다.`;
+        btn.innerText = '🛡️ 전술 훈련소로';
       } else if (result === 'COMPLETE') {
         title.innerText = 'GAME CLEAR!';
         title.style.color = '#facc15';
         title.style.textShadow = '0 0 20px rgba(250, 204, 21, 0.7)';
         desc.innerText = '축하합니다! 고블린 주술사의 요새를 완파하고\n모든 모험을 성공적으로 마쳤습니다!';
-        btn.innerText = '처음부터 다시하기';
+        btn.innerText = '🔄 처음부터 다시하기';
       } else if (result === 'DEFEAT') {
         title.innerText = 'DEFEAT';
         title.style.color = '#ef4444';
@@ -3523,7 +3677,7 @@ export class GameScene extends Phaser.Scene {
         const chosenSelfHealIdx = enemy.spells.findIndex(s => s.effectType === 'heal');
         if (chosenSelfHealIdx !== -1) {
           const healSpell = enemy.spells[chosenSelfHealIdx];
-          const canHeal = enemy.mp >= healSpell.cost && enemy.ap > 0 && !enemy.hasAttackedThisTurn;
+          const canHeal = enemy.mp >= healSpell.cost && enemy.ap >= healSpell.cost && !enemy.hasAttackedThisTurn;
           const hpRatio = enemy.hp / enemy.maxHp;
           if (canHeal && hpRatio <= 0.6) {
             this.executeSpell(enemy, { x: enemy.x, y: enemy.y }, chosenSelfHealIdx);
@@ -3538,7 +3692,7 @@ export class GameScene extends Phaser.Scene {
         let bestCost = -1;
         for (let i = 0; i < enemy.spells.length; i++) {
           const s = enemy.spells[i];
-          if (s.effectType === 'damage' && enemy.mp >= s.cost) {
+          if (s.effectType === 'damage' && enemy.mp >= s.cost && enemy.ap >= s.cost) {
             if (this.isCoordSpellRange(enemy, closestPlayer.x, closestPlayer.y, i)) {
               if (s.cost > bestCost) {
                 bestCost = s.cost;
@@ -3548,7 +3702,7 @@ export class GameScene extends Phaser.Scene {
           }
         }
 
-        if (chosenSpellIndex !== -1 && enemy.ap > 0 && !enemy.hasAttackedThisTurn) {
+        if (chosenSpellIndex !== -1 && enemy.ap >= enemy.spells[chosenSpellIndex].cost && !enemy.hasAttackedThisTurn) {
           this.executeSpell(enemy, { x: closestPlayer.x, y: closestPlayer.y }, chosenSpellIndex);
           this.time.delayedCall(1200 * this.animationSpeedMultiplier, () => {
             afterSpellCallback();
@@ -3913,6 +4067,354 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  // ==========================================
+  // SIGNATURE SPELL GRAPHICS EFFECTS (VECTOR PARTICLES)
+  // ==========================================
+
+  private createFireSpellFX(x: number, y: number) {
+    const fireGraphics = this.add.graphics();
+    fireGraphics.setDepth(y + 100);
+
+    // 1. Expanding flame ring
+    fireGraphics.lineStyle(3, 0xef4444, 0.95);
+    fireGraphics.fillStyle(0xf97316, 0.25);
+    fireGraphics.beginPath();
+    fireGraphics.strokeEllipse(x, y, 48, 24);
+    fireGraphics.fillEllipse(x, y, 48, 24);
+
+    this.tweens.add({
+      targets: fireGraphics,
+      scaleX: 1.6,
+      scaleY: 1.6,
+      alpha: 0,
+      duration: 320 * this.animationSpeedMultiplier,
+      onComplete: () => fireGraphics.destroy()
+    });
+
+    // 2. Fire embers particles (12 flame dots flying outward)
+    for (let i = 0; i < 12; i++) {
+      const ember = this.add.graphics();
+      ember.setDepth(y + 101);
+      
+      const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+      const speed = Phaser.Math.FloatBetween(40, 85);
+      const tarX = x + Math.cos(angle) * speed;
+      const tarY = y + Math.sin(angle) * speed * 0.5 - Phaser.Math.FloatBetween(10, 30); // Float upward
+      
+      const color = Phaser.Utils.Array.GetRandom([0xef4444, 0xf97316, 0xfacc15]);
+      ember.fillStyle(color, 0.95);
+      ember.fillCircle(x, y - 8, Phaser.Math.FloatBetween(3, 6));
+
+      this.tweens.add({
+        targets: ember,
+        x: tarX - x,
+        y: tarY - (y - 8),
+        scaleX: 0.1,
+        scaleY: 0.1,
+        alpha: 0,
+        ease: 'Cubic.easeOut',
+        duration: Phaser.Math.Between(450, 700) * this.animationSpeedMultiplier,
+        onComplete: () => ember.destroy()
+      });
+    }
+  }
+
+  private createLightningSpellFX(x: number, y: number) {
+    const bolt = this.add.graphics();
+    bolt.setDepth(y + 102);
+
+    // 1. Draw triple zigzag lightning bolts
+    bolt.lineStyle(3, 0xffffff, 1.0);
+    bolt.beginPath();
+    
+    // Draw three random lightning forks
+    for (let f = 0; f < 3; f++) {
+      let curX = x + Phaser.Math.Between(-15, 15);
+      let curY = y - 280;
+      bolt.moveTo(curX, curY);
+
+      const segments = 5;
+      const segmentHeight = 280 / segments;
+      for (let s = 1; s <= segments; s++) {
+        const nextY = y - 280 + s * segmentHeight;
+        const nextX = (s === segments) ? x : x + Phaser.Math.Between(-25, 25);
+        bolt.lineTo(nextX, nextY);
+      }
+    }
+    bolt.strokePath();
+
+    // 2. Flashing electric discharge ring
+    const ring = this.add.graphics();
+    ring.setDepth(y + 100);
+    ring.lineStyle(2.5, 0x00f3ff, 0.9);
+    ring.strokeEllipse(x, y, 40, 20);
+
+    this.tweens.add({
+      targets: ring,
+      scaleX: 1.8,
+      scaleY: 1.8,
+      alpha: 0,
+      duration: 250 * this.animationSpeedMultiplier,
+      onComplete: () => ring.destroy()
+    });
+
+    this.tweens.add({
+      targets: bolt,
+      alpha: 0,
+      duration: 180 * this.animationSpeedMultiplier,
+      onComplete: () => bolt.destroy()
+    });
+
+    // 3. Shocking electric fragments flying outward
+    for (let i = 0; i < 8; i++) {
+      const spark = this.add.graphics();
+      spark.setDepth(y + 101);
+      spark.lineStyle(1.8, 0x00f3ff, 0.95);
+      
+      const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+      const rad = Phaser.Math.FloatBetween(25, 55);
+      
+      spark.beginPath();
+      spark.moveTo(x, y - 10);
+      spark.lineTo(x + Math.cos(angle) * rad, y - 10 + Math.sin(angle) * rad * 0.5);
+      spark.strokePath();
+
+      this.tweens.add({
+        targets: spark,
+        alpha: 0,
+        scaleY: 0.2,
+        duration: 300 * this.animationSpeedMultiplier,
+        onComplete: () => spark.destroy()
+      });
+    }
+  }
+
+  private createHealSpellFX(x: number, y: number) {
+    // 1. Rotating, floating Holy Cross
+    const cross = this.add.graphics();
+    cross.setDepth(y + 105);
+    cross.fillStyle(0x10b981, 0.9);
+    
+    // Draw cross polygon centered
+    cross.fillRect(-6, -20, 12, 40); // Vertical bar
+    cross.fillRect(-18, -8, 36, 16); // Horizontal bar
+    cross.setPosition(x, y - 25);
+
+    this.tweens.add({
+      targets: cross,
+      y: y - 85,
+      angle: 180,
+      alpha: 0,
+      scaleX: 0.7,
+      scaleY: 0.7,
+      duration: 750 * this.animationSpeedMultiplier,
+      ease: 'Quad.easeOut',
+      onComplete: () => cross.destroy()
+    });
+
+    // 2. Fairy Sparkle Particles (8 rising stars)
+    for (let i = 0; i < 8; i++) {
+      const sparkle = this.add.graphics();
+      sparkle.setDepth(y + 104);
+      sparkle.fillStyle(Phaser.Utils.Array.GetRandom([0x10b981, 0x34d399, 0xfacc15]), 0.95);
+      sparkle.fillCircle(0, 0, Phaser.Math.FloatBetween(2, 4.5));
+      
+      const startAngle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+      const startRad = Phaser.Math.FloatBetween(10, 25);
+      sparkle.setPosition(x + Math.cos(startAngle) * startRad, y + Math.sin(startAngle) * startRad * 0.5);
+
+      this.tweens.add({
+        targets: sparkle,
+        y: sparkle.y - Phaser.Math.FloatBetween(35, 75),
+        x: sparkle.x + Phaser.Math.FloatBetween(-15, 15),
+        alpha: 0,
+        scaleX: 0.1,
+        scaleY: 0.1,
+        ease: 'Sine.easeOut',
+        duration: Phaser.Math.Between(600, 950) * this.animationSpeedMultiplier,
+        onComplete: () => sparkle.destroy()
+      });
+    }
+  }
+
+  private createPoisonSpellFX(x: number, y: number) {
+    // 1. Expanding toxic puddle (dark green)
+    const puddle = this.add.graphics();
+    puddle.setDepth(y - 1); // Draw on floor
+    puddle.fillStyle(0x064e3b, 0.75);
+    puddle.lineStyle(2.0, 0x10b981, 0.9);
+    puddle.beginPath();
+    puddle.strokeEllipse(x, y, 42, 21);
+    puddle.fillEllipse(x, y, 42, 21);
+    puddle.setScale(0);
+
+    this.tweens.add({
+      targets: puddle,
+      scaleX: 1.2,
+      scaleY: 1.2,
+      duration: 350 * this.animationSpeedMultiplier,
+      ease: 'Back.easeOut'
+    });
+
+    this.tweens.add({
+      targets: puddle,
+      alpha: 0,
+      delay: 600 * this.animationSpeedMultiplier,
+      duration: 350 * this.animationSpeedMultiplier,
+      onComplete: () => puddle.destroy()
+    });
+
+    // 2. Rising toxic bubbles (droplets)
+    for (let i = 0; i < 6; i++) {
+      const bubble = this.add.graphics();
+      bubble.setDepth(y + 102);
+      
+      const bColor = Phaser.Utils.Array.GetRandom([0x22c55e, 0x8b5cf6]); // Toxic green or debuff purple
+      bubble.fillStyle(bColor, 0.85);
+      bubble.fillCircle(0, 0, Phaser.Math.FloatBetween(2.5, 5));
+      
+      const px = x + Phaser.Math.FloatBetween(-25, 25);
+      const py = y + Phaser.Math.FloatBetween(-10, 10) * 0.5;
+      bubble.setPosition(px, py);
+
+      this.tweens.add({
+        targets: bubble,
+        y: py - Phaser.Math.FloatBetween(30, 60),
+        alpha: 0,
+        scaleX: 1.4, // expand bubble before pop
+        scaleY: 1.4,
+        ease: 'Quad.easeOut',
+        duration: Phaser.Math.Between(500, 850) * this.animationSpeedMultiplier,
+        onComplete: () => bubble.destroy()
+      });
+    }
+  }
+
+  private createIceSpellFX(x: number, y: number) {
+    // 1. Jagged Ice Spikes shooting from ground
+    const ice = this.add.graphics();
+    ice.setDepth(y + 103);
+    ice.fillStyle(0x00f3ff, 0.8);
+    ice.lineStyle(1.5, 0xffffff, 0.95);
+
+    // Draw three sharp shards pointing outwards
+    ice.beginPath();
+    
+    // Shard 1: Center top
+    ice.moveTo(x - 8, y);
+    ice.lineTo(x, y - 48);
+    ice.lineTo(x + 8, y);
+    ice.lineTo(x - 8, y);
+
+    // Shard 2: Left tilt
+    ice.moveTo(x - 18, y + 4);
+    ice.lineTo(x - 30, y - 32);
+    ice.lineTo(x - 4, y);
+    
+    // Shard 3: Right tilt
+    ice.moveTo(x + 4, y);
+    ice.lineTo(x + 30, y - 32);
+    ice.lineTo(x + 18, y + 4);
+
+    ice.closePath();
+    ice.fillPath();
+    ice.strokePath();
+    
+    ice.setScale(0);
+
+    this.tweens.add({
+      targets: ice,
+      scaleX: 1.2,
+      scaleY: 1.2,
+      duration: 250 * this.animationSpeedMultiplier,
+      ease: 'Back.easeOut'
+    });
+
+    this.tweens.add({
+      targets: ice,
+      alpha: 0,
+      delay: 500 * this.animationSpeedMultiplier,
+      duration: 250 * this.animationSpeedMultiplier,
+      onComplete: () => ice.destroy()
+    });
+
+    // 2. Falling snowflake dusts
+    for (let i = 0; i < 8; i++) {
+      const flake = this.add.graphics();
+      flake.setDepth(y + 104);
+      flake.fillStyle(0xe0f2fe, 0.9);
+      flake.fillCircle(0, 0, Phaser.Math.FloatBetween(2, 3.5));
+      
+      const fx = x + Phaser.Math.FloatBetween(-30, 30);
+      const fy = y - 45 + Phaser.Math.FloatBetween(-15, 15);
+      flake.setPosition(fx, fy);
+
+      this.tweens.add({
+        targets: flake,
+        y: fy + Phaser.Math.FloatBetween(20, 45), // fall downwards
+        x: fx + Phaser.Math.FloatBetween(-10, 10),
+        alpha: 0,
+        duration: Phaser.Math.Between(550, 850) * this.animationSpeedMultiplier,
+        onComplete: () => flake.destroy()
+      });
+    }
+  }
+
+  private createWindSpellFX(x: number, y: number, dx: number, dy: number) {
+    // 1. Spinning Spiral wind waves
+    const wind = this.add.graphics();
+    wind.setDepth(y + 101);
+    wind.lineStyle(2.0, 0xf8fafc, 0.9);
+    
+    // Draw 3 spiral arcs
+    wind.beginPath();
+    wind.arc(0, 0, 18, 0, Math.PI * 0.7);
+    wind.arc(0, 0, 28, Math.PI * 0.6, Math.PI * 1.5);
+    wind.arc(0, 0, 38, Math.PI * 1.2, Math.PI * 2.0);
+    wind.strokePath();
+
+    wind.setPosition(x, y - 10);
+    wind.setAngle(0);
+
+    this.tweens.add({
+      targets: wind,
+      angle: 360,
+      scaleX: 1.4,
+      scaleY: 1.4,
+      alpha: 0,
+      duration: 400 * this.animationSpeedMultiplier,
+      onComplete: () => wind.destroy()
+    });
+
+    // 2. Fast breeze vectors following the direction of wind pierce
+    for (let i = 0; i < 5; i++) {
+      const line = this.add.graphics();
+      line.setDepth(y + 102);
+      line.lineStyle(1.5, 0xffffff, 0.85);
+
+      const offsetAngle = Phaser.Math.FloatBetween(-0.2, 0.2);
+      const baseAngle = Math.atan2(dy * 0.5, dx) + offsetAngle;
+      
+      const rx = x + Phaser.Math.FloatBetween(-15, 15);
+      const ry = y - 10 + Phaser.Math.FloatBetween(-8, 8);
+      line.setPosition(rx, ry);
+
+      line.beginPath();
+      line.moveTo(0, 0);
+      line.lineTo(Math.cos(baseAngle) * 45, Math.sin(baseAngle) * 45);
+      line.strokePath();
+
+      this.tweens.add({
+        targets: line,
+        x: rx + Math.cos(baseAngle) * 60,
+        y: ry + Math.sin(baseAngle) * 60,
+        alpha: 0,
+        duration: 350 * this.animationSpeedMultiplier,
+        onComplete: () => line.destroy()
+      });
+    }
+  }
+
   private drawSelectionRing() {
     this.selectionRingGraphics.clear();
     if (!this.selectedCharacter || this.isGameOver || this.selectedCharacter.hp <= 0) return;
@@ -3923,6 +4425,312 @@ export class GameScene extends Phaser.Scene {
 
     this.selectionRingGraphics.lineStyle(2.5, ringColor, 0.95);
     this.selectionRingGraphics.strokeEllipse(pos.x, pos.y, 50 * pulse, 25 * pulse);
+  }
+
+  // ==========================================
+  // TACTICAL TRAINING ACADEMY & EQUIPMENT SYSTEM
+  // ==========================================
+
+  private openAcademyModal() {
+    const modal = document.getElementById('academy-modal');
+    if (!modal) return;
+
+    modal.classList.remove('hidden');
+
+    // 1. Reset Tab display state to default (Training Tab active)
+    const tabTrainBtn = document.getElementById('tab-btn-train');
+    const tabEquipBtn = document.getElementById('tab-btn-equip');
+    const tabTrainView = document.getElementById('academy-tab-train');
+    const tabEquipView = document.getElementById('academy-tab-equip');
+
+    if (tabTrainBtn && tabEquipBtn && tabTrainView && tabEquipView) {
+      tabTrainBtn.classList.add('active');
+      tabEquipBtn.classList.remove('active');
+      tabTrainView.classList.remove('hidden');
+      tabEquipView.classList.add('hidden');
+    }
+
+    this.updateAcademyUI();
+
+    // 2. Bind Tab Switch Buttons
+    if (tabTrainBtn && tabEquipBtn && tabTrainView && tabEquipView) {
+      tabTrainBtn.onclick = () => {
+        tabTrainBtn.classList.add('active');
+        tabEquipBtn.classList.remove('active');
+        tabTrainView.classList.remove('hidden');
+        tabEquipView.classList.add('hidden');
+        this.updateAcademyUI();
+      };
+      tabEquipBtn.onclick = () => {
+        tabTrainBtn.classList.remove('active');
+        tabEquipBtn.classList.add('active');
+        tabTrainView.classList.add('hidden');
+        tabEquipView.classList.remove('hidden');
+        this.updateAcademyEquipTab();
+      };
+    }
+
+    // 3. Bind Hero selector buttons inside Equipment Tab
+    const heroBtns = document.querySelectorAll('.hero-sel-btn');
+    heroBtns.forEach(btn => {
+      const element = btn as HTMLButtonElement;
+      element.onclick = () => {
+        heroBtns.forEach(b => b.classList.remove('active'));
+        element.classList.add('active');
+        this.selectedAcademyHeroKey = element.getAttribute('data-hero') || 'warrior';
+        this.updateAcademyEquipTab();
+      };
+    });
+
+    // 4. Bind Slot Unequip actions
+    const btnUnequipWep = document.getElementById('btn-unequip-weapon');
+    if (btnUnequipWep) {
+      btnUnequipWep.onclick = () => this.unequipItem('weapon');
+    }
+    const btnUnequipArm = document.getElementById('btn-unequip-armor');
+    if (btnUnequipArm) {
+      btnUnequipArm.onclick = () => this.unequipItem('armor');
+    }
+
+    // 5. Bind Academy Exit button
+    const btnExit = document.getElementById('btn-academy-exit');
+    if (btnExit) {
+      const newExit = btnExit.cloneNode(true) as HTMLButtonElement;
+      btnExit.parentNode!.replaceChild(newExit, btnExit);
+      newExit.addEventListener('click', () => {
+        modal.classList.add('hidden');
+        if (this.currentStageIndex < STAGE_PRESETS.length - 1) {
+          this.loadStage(this.currentStageIndex + 1);
+        } else {
+          this.resetPermanentGrowth();
+          this.loadStage(0);
+        }
+      });
+    }
+  }
+
+  private updateAcademyUI() {
+    const spheresVal = document.getElementById('academy-spheres-val');
+    if (spheresVal) {
+      spheresVal.textContent = `🌟 ${this.trainingSpheres}`;
+    }
+
+    const container = document.getElementById('academy-cards-container');
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    const heroes = [
+      { key: 'warrior', name: '레온 (Leon)', avatar: '🛡️', baseHp: 160, baseMp: 4, baseMove: 4 },
+      { key: 'mage', name: '아이샤 (Aisha)', avatar: '🔥', baseHp: 90, baseMp: 6, baseMove: 3 },
+      { key: 'archer', name: '로이 (Roy)', avatar: '🏹', baseHp: 110, baseMp: 4, baseMove: 4 },
+      { key: 'cleric', name: '세라 (Sera)', avatar: '💚', baseHp: 100, baseMp: 5, baseMove: 3 },
+      { key: 'rogue', name: '카엘 (Kael)', avatar: '🗡️', baseHp: 120, baseMp: 4, baseMove: 5 }
+    ];
+
+    heroes.forEach(h => {
+      const growth = this.allyGrowthStats[h.key] || { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null };
+      
+      const curHp = h.baseHp + growth.bonusHp;
+      const curDmg = growth.bonusDmg;
+      const curMove = h.baseMove + growth.bonusMove;
+      const curMp = h.baseMp + growth.bonusMp;
+
+      const card = document.createElement('div');
+      card.className = `academy-card ${h.key}`;
+      card.innerHTML = `
+        <div class="card-avatar">${h.avatar}</div>
+        <div class="card-name">${h.name}</div>
+        
+        <div class="card-stat-row">
+          <span class="card-stat-label">❤️ 최대 체력</span>
+          <span class="card-stat-val">${curHp}</span>
+        </div>
+        <div class="card-stat-row">
+          <span class="card-stat-label">⚔️ 가산 공격력</span>
+          <span class="card-stat-val">+${curDmg}</span>
+        </div>
+        <div class="card-stat-row">
+          <span class="card-stat-label">👟 이동 범위</span>
+          <span class="card-stat-val">${curMove}칸</span>
+        </div>
+        <div class="card-stat-row">
+          <span class="card-stat-label">🔮 최대 마나</span>
+          <span class="card-stat-val">${curMp}</span>
+        </div>
+        
+        <div class="card-actions">
+          <button class="btn-upgrade btn-up-hp" ${this.trainingSpheres < 1 ? 'disabled' : ''}>HP 강화 (🌟1)</button>
+          <button class="btn-upgrade btn-up-dmg" ${this.trainingSpheres < 1 ? 'disabled' : ''}>공격력 강화 (🌟1)</button>
+          <button class="btn-upgrade btn-up-move" ${(this.trainingSpheres < 2 || curMove >= 6) ? 'disabled' : ''}>이동력 +1 (🌟2)</button>
+          <button class="btn-upgrade btn-up-mp" ${(this.trainingSpheres < 2 || curMp >= 7) ? 'disabled' : ''}>최대 MP +1 (🌟2)</button>
+        </div>
+      `;
+
+      card.querySelector('.btn-up-hp')!.addEventListener('click', () => {
+        if (this.trainingSpheres >= 1) {
+          this.trainingSpheres -= 1;
+          growth.bonusHp += 15;
+          this.updateAcademyUI();
+        }
+      });
+      card.querySelector('.btn-up-dmg')!.addEventListener('click', () => {
+        if (this.trainingSpheres >= 1) {
+          this.trainingSpheres -= 1;
+          growth.bonusDmg += 5;
+          this.updateAcademyUI();
+        }
+      });
+      card.querySelector('.btn-up-move')!.addEventListener('click', () => {
+        if (this.trainingSpheres >= 2 && curMove < 6) {
+          this.trainingSpheres -= 2;
+          growth.bonusMove += 1;
+          this.updateAcademyUI();
+        }
+      });
+      card.querySelector('.btn-up-mp')!.addEventListener('click', () => {
+        if (this.trainingSpheres >= 2 && curMp < 7) {
+          this.trainingSpheres -= 2;
+          growth.bonusMp += 1;
+          this.updateAcademyUI();
+        }
+      });
+
+      container.appendChild(card);
+    });
+  }
+
+  private updateAcademyEquipTab() {
+    const growth = this.allyGrowthStats[this.selectedAcademyHeroKey];
+    if (!growth) return;
+
+    const heroesInfo: Record<string, { name: string; avatar: string }> = {
+      warrior: { name: '레온 (Leon)', avatar: '🛡️' },
+      mage: { name: '아이샤 (Aisha)', avatar: '🔥' },
+      archer: { name: '로이 (Roy)', avatar: '🏹' },
+      cleric: { name: '세라 (Sera)', avatar: '💚' },
+      rogue: { name: '카엘 (Kael)', avatar: '🗡️' }
+    };
+
+    const info = heroesInfo[this.selectedAcademyHeroKey] || { name: '영웅', avatar: '🛡️' };
+    const avatarDisplay = document.getElementById('equip-hero-visual-avatar');
+    const nameDisplay = document.getElementById('equip-hero-name-label');
+    const weaponDisplay = document.getElementById('slot-weapon-display');
+    const armorDisplay = document.getElementById('slot-armor-display');
+    const btnUnequipWep = document.getElementById('btn-unequip-weapon') as HTMLButtonElement;
+    const btnUnequipArm = document.getElementById('btn-unequip-armor') as HTMLButtonElement;
+
+    if (avatarDisplay) avatarDisplay.textContent = info.avatar;
+    if (nameDisplay) nameDisplay.textContent = info.name;
+
+    if (weaponDisplay && btnUnequipWep) {
+      if (growth.equippedWeapon) {
+        weaponDisplay.innerHTML = `<span style="color: #60a5fa;">${growth.equippedWeapon.name}</span> (+${growth.equippedWeapon.dmgBonus} ATK)`;
+        btnUnequipWep.disabled = false;
+      } else {
+        weaponDisplay.textContent = '장착된 무기 없음';
+        btnUnequipWep.disabled = true;
+      }
+    }
+
+    if (armorDisplay && btnUnequipArm) {
+      if (growth.equippedArmor) {
+        armorDisplay.innerHTML = `<span style="color: #34d399;">${growth.equippedArmor.name}</span> (+${growth.equippedArmor.hpBonus} HP)`;
+        btnUnequipArm.disabled = false;
+      } else {
+        armorDisplay.textContent = '장착된 갑옷 없음';
+        btnUnequipArm.disabled = true;
+      }
+    }
+
+    const invContainer = document.getElementById('inventory-grid-container');
+    if (!invContainer) return;
+
+    invContainer.innerHTML = '';
+
+    if (this.sharedInventory.length === 0) {
+      invContainer.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: #64748b; font-size: 0.9rem; margin-top: 50px;">🎒 보관된 미장착 장비가 없습니다.</div>`;
+      return;
+    }
+
+    this.sharedInventory.forEach((item, index) => {
+      const tile = document.createElement('div');
+      tile.className = 'inventory-item-tile';
+
+      const typeLabel = item.type === 'weapon' ? '⚔️' : '🛡️';
+      const statLabel = item.type === 'weapon' ? `+${item.dmgBonus} ATK` : `+${item.hpBonus} HP`;
+      
+      const classKorean: Record<string, string> = {
+        warrior: '전사', mage: '법사', archer: '궁수', cleric: '사제', rogue: '도적'
+      };
+      const limitLabel = classKorean[item.classLimit] || '공용';
+
+      tile.innerHTML = `
+        <div class="inv-item-name">${typeLabel} ${item.name}</div>
+        <div class="inv-item-class">직업: ${limitLabel}</div>
+        <div class="inv-item-stat">${statLabel}</div>
+      `;
+
+      tile.onclick = () => {
+        if (item.classLimit !== this.selectedAcademyHeroKey) {
+          this.showDialogue('SYSTEM', `해당 아이템은 [${limitLabel}] 클래스만 장착할 수 있습니다!`, 2000);
+          return;
+        }
+        this.equipItem(item, index);
+      };
+
+      invContainer.appendChild(tile);
+    });
+  }
+
+  private equipItem(item: Item, index: number) {
+    const growth = this.allyGrowthStats[this.selectedAcademyHeroKey];
+    if (!growth) return;
+
+    if (item.type === 'weapon') {
+      if (growth.equippedWeapon) {
+        this.sharedInventory.push(growth.equippedWeapon);
+      }
+      growth.equippedWeapon = item;
+    } else {
+      if (growth.equippedArmor) {
+        this.sharedInventory.push(growth.equippedArmor);
+      }
+      growth.equippedArmor = item;
+    }
+
+    this.sharedInventory.splice(index, 1);
+    this.updateAcademyEquipTab();
+    this.showDialogue('SYSTEM', `[${item.name}] 장착 완료!`, 1200);
+  }
+
+  private unequipItem(slotType: 'weapon' | 'armor') {
+    const growth = this.allyGrowthStats[this.selectedAcademyHeroKey];
+    if (!growth) return;
+
+    if (slotType === 'weapon' && growth.equippedWeapon) {
+      this.sharedInventory.push(growth.equippedWeapon);
+      this.showDialogue('SYSTEM', `[${growth.equippedWeapon.name}] 해제 완료!`, 1200);
+      growth.equippedWeapon = null;
+    } else if (slotType === 'armor' && growth.equippedArmor) {
+      this.sharedInventory.push(growth.equippedArmor);
+      this.showDialogue('SYSTEM', `[${growth.equippedArmor.name}] 해제 완료!`, 1200);
+      growth.equippedArmor = null;
+    }
+
+    this.updateAcademyEquipTab();
+  }
+
+  private resetPermanentGrowth() {
+    this.trainingSpheres = 0;
+    this.sharedInventory = [];
+    this.allyGrowthStats = {
+      warrior: { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null },
+      mage: { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null },
+      archer: { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null },
+      cleric: { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null },
+      rogue: { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null }
+    };
   }
 
   private showDialogue(speaker: string, text: string, durationMs: number) {

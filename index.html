@@ -111,6 +111,77 @@
           <button id="btn-next-stage" class="game-btn highlight" style="margin-top: 20px;">다음 스테이지로</button>
         </div>
       </div>
+
+      <!-- Tactical Training Academy Modal -->
+      <div id="academy-modal" class="overlay-modal hidden">
+        <div class="modal-content glass-panel academy-panel">
+          <h2>🌟 아군 진영 재정비 본부 🌟</h2>
+          
+          <!-- Tab Switch Buttons -->
+          <div class="academy-tabs">
+            <button id="tab-btn-train" class="tab-btn active">🌟 능력치 훈련</button>
+            <button id="tab-btn-equip" class="tab-btn">🎒 장비 및 인벤토리</button>
+          </div>
+
+          <!-- TAB 1: Stats Training View -->
+          <div id="academy-tab-train" class="tab-content-view">
+            <p class="academy-subtitle" style="margin-top: 5px;">획득한 훈련 스피어로 아군 유닛의 능력치를 단련하세요!</p>
+            <div class="sphere-counter">
+              보유한 훈련 스피어: <span id="academy-spheres-val" style="color: #facc15; font-weight: bold;">🌟 0</span> 개
+            </div>
+            <div id="academy-cards-container">
+              <!-- Dynamically populated card slots -->
+            </div>
+          </div>
+
+          <!-- TAB 2: Equipment & Inventory View -->
+          <div id="academy-tab-equip" class="tab-content-view hidden">
+            <p class="academy-subtitle" style="margin-top: 5px;">전투 중 필드에서 주운 장비를 영웅들에게 착용시킵니다.</p>
+            
+            <div class="equip-split-container">
+              <!-- Left: Selected Hero Details & Slots -->
+              <div class="equip-left-panel">
+                <div class="equip-hero-selector-bar">
+                  <button class="hero-sel-btn active" data-hero="warrior">🛡️ 전사</button>
+                  <button class="hero-sel-btn" data-hero="mage">🔥 법사</button>
+                  <button class="hero-sel-btn" data-hero="archer">🏹 궁수</button>
+                  <button class="hero-sel-btn" data-hero="cleric">💚 사제</button>
+                  <button class="hero-sel-btn" data-hero="rogue">🗡️ 도적</button>
+                </div>
+                
+                <div class="equip-hero-status-panel">
+                  <div id="equip-hero-visual-avatar">🛡️</div>
+                  <h3 id="equip-hero-name-label">레온 (Leon)</h3>
+                  
+                  <div class="slots-box">
+                    <div class="equip-slot-item">
+                      <span class="slot-type-lbl">⚔️ 무기 장착</span>
+                      <div id="slot-weapon-display" class="slot-item-name">장착된 무기 없음</div>
+                      <button id="btn-unequip-weapon" class="btn-unequip">해제</button>
+                    </div>
+                    
+                    <div class="equip-slot-item">
+                      <span class="slot-type-lbl">🛡️ 갑옷 장착</span>
+                      <div id="slot-armor-display" class="slot-item-name">장착된 갑옷 없음</div>
+                      <button id="btn-unequip-armor" class="btn-unequip">해제</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Right: Shared Inventory Grid -->
+              <div class="equip-right-panel">
+                <h4>🎒 공용 인벤토리 보관함 (Shared Inventory)</h4>
+                <div id="inventory-grid-container">
+                  <!-- Grid list of Item cards -->
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <button id="btn-academy-exit" class="game-btn highlight" style="margin-top: 25px; padding: 12px 35px; font-size: 15px; border-color: #facc15;">⚔️ 다음 전장으로 진입</button>
+        </div>
+      </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
