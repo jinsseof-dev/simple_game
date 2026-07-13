@@ -162,6 +162,7 @@ export class GameScene extends Phaser.Scene {
   private obstacleGrid: boolean[][] = [];
   private cliffGrid: boolean[][] = [];
   private bridgeGrid: boolean[][] = [];
+  private lavaGrid: boolean[][] = [];
 
   // Rendering layers
   private tileMapGraphics!: Phaser.GameObjects.Graphics;
@@ -624,31 +625,30 @@ export class GameScene extends Phaser.Scene {
     this.obstacleGrid = [];
     this.cliffGrid = [];
     this.bridgeGrid = [];
+    this.lavaGrid = [];
+
+    const stage = STAGE_PRESETS[this.currentStageIndex];
+    const theme = stage ? stage.theme : 'grass';
 
     // Initialize blank grids matching dynamic dimension
     for (let y = 0; y < this.gridHeight; y++) {
       this.obstacleGrid.push(Array(this.gridWidth).fill(false));
       this.cliffGrid.push(Array(this.gridWidth).fill(false));
       this.bridgeGrid.push(Array(this.gridWidth).fill(false));
+      this.lavaGrid.push(Array(this.gridWidth).fill(false));
     }
 
-    // Determine Geographical Theme based on current Stage index
-    const isCanyonTheme = (this.currentStageIndex % 2 === 0);
-
-    if (isCanyonTheme) {
-      // 1. Canyon Cliff & Bridge Theme
+    if (theme === 'desert') {
+      // 1. Canyon Cliff & Bridge Theme (Desert theme gets gorge/canyons)
       const cx = Math.floor(this.gridWidth / 2);
       
-      // Carve vertical canyon cliff line
       for (let y = 0; y < this.gridHeight; y++) {
         this.cliffGrid[y][cx] = true;
-        // Occassionally carve width of 2 for nice staggered look
         if (y % 4 !== 0 && cx + 1 < this.gridWidth) {
           this.cliffGrid[y][cx + 1] = true;
         }
       }
 
-      // Span 2-tile wide tactical bridge across the middle
       const cy = Math.floor(this.gridHeight / 2);
       const bridgeRow1 = cy;
       const bridgeRow2 = cy - 1;
@@ -664,7 +664,7 @@ export class GameScene extends Phaser.Scene {
         }
       }
 
-      // Add a few minor barrels/crates near the bridge heads for tactical cover
+      // Add cover obstacles near the bridge heads
       const covers = [
         { x: cx - 2, y: bridgeRow1 },
         { x: cx - 2, y: bridgeRow2 },
@@ -676,11 +676,58 @@ export class GameScene extends Phaser.Scene {
           this.obstacleGrid[c.y][c.x] = true;
         }
       });
-    } else {
-      // 2. Rocky Forest Theme (Open field with scattered obstacles)
+    } else if (theme === 'town') {
+      // 2. Town / Fortress Theme: Lava Pit trenches flowing through town streets
+      const lavaCol1 = Math.floor(this.gridWidth / 2) - 1;
+      const lavaCol2 = Math.floor(this.gridWidth / 2);
+
+      for (let y = 0; y < this.gridHeight; y++) {
+        // Leave a 2-tile bridge in the middle for passage across lava
+        const cy = Math.floor(this.gridHeight / 2);
+        if (y !== cy && y !== cy - 1) {
+          this.lavaGrid[y][lavaCol1] = true;
+          this.lavaGrid[y][lavaCol2] = true;
+        }
+      }
+
+      // Add obstacles (Crates/Barrels)
       for (let y = 1; y < this.gridHeight - 1; y++) {
         for (let x = 1; x < this.gridWidth - 1; x++) {
-          // Avoid carving the spawn corners (Left-Bottom & Right-Top)
+          const isNearAllySpawn = (x < 3 && y >= this.gridHeight - 3);
+          const isNearEnemySpawn = (x >= this.gridWidth - 3 && y < 3);
+          const isLava = this.lavaGrid[y][x];
+
+          if (!isNearAllySpawn && !isNearEnemySpawn && !isLava && Math.random() < 0.12) {
+            this.obstacleGrid[y][x] = true;
+          }
+        }
+      }
+    } else if (theme === 'dungeon') {
+      // 3. Dungeon Boss Arena Theme: Highly organized symmetrical pillars & checkerboard lava pools
+      for (let y = 0; y < this.gridHeight; y++) {
+        for (let x = 0; x < this.gridWidth; x++) {
+          const isNearAllySpawn = (x < 3 && y >= this.gridHeight - 3);
+          const isNearEnemySpawn = (x >= this.gridWidth - 3 && y < 3);
+          
+          if (isNearAllySpawn || isNearEnemySpawn) continue;
+
+          // Symmetrical pillars/obstacles
+          if ((x === 3 || x === this.gridWidth - 4) && (y === 3 || y === this.gridHeight - 4)) {
+            this.obstacleGrid[y][x] = true;
+          }
+
+          // Checkerboard lava pits in center
+          if (x >= 4 && x <= this.gridWidth - 5 && y >= 4 && y <= this.gridHeight - 5) {
+            if ((x + y) % 2 === 0) {
+              this.lavaGrid[y][x] = true;
+            }
+          }
+        }
+      }
+    } else {
+      // 4. Grass Theme (Generic open field with scattered foliage)
+      for (let y = 1; y < this.gridHeight - 1; y++) {
+        for (let x = 1; x < this.gridWidth - 1; x++) {
           const isNearAllySpawn = (x < 4 && y >= this.gridHeight - 4);
           const isNearEnemySpawn = (x >= this.gridWidth - 4 && y < 4);
           
@@ -745,12 +792,15 @@ export class GameScene extends Phaser.Scene {
 
         // Subdued, premium tones matching paper tabletop boardgames
         let tileColor = 0x1e293b;
-        if (theme === 'grass') {
+        const isLavaTile = !!(this.lavaGrid[y] && this.lavaGrid[y][x]);
+        if (isLavaTile) {
+          tileColor = (x + y) % 2 === 0 ? 0xe11d48 : 0xbe123c;
+        } else if (theme === 'grass') {
           tileColor = (x + y) % 2 === 0 ? 0x2e4a31 : 0x1f3622;
         } else if (theme === 'desert') {
           tileColor = (x + y) % 2 === 0 ? 0xd2b48c : 0xb39371;
         } else if (theme === 'town') {
-          tileColor = (x + y) % 2 === 0 ? 0x854d0e : 0x713f12; // Terracotta clay colors
+          tileColor = (x + y) % 2 === 0 ? 0x854d0e : 0x713f12;
         } else if (theme === 'dungeon') {
           tileColor = (x + y) % 2 === 0 ? 0x384252 : 0x29313e;
         }
@@ -758,7 +808,7 @@ export class GameScene extends Phaser.Scene {
         const isCliff = this.cliffGrid[y] && this.cliffGrid[y][x];
         const isBridge = this.bridgeGrid[y] && this.bridgeGrid[y][x];
         
-        this.drawIsometricTile(this.tileMapGraphics, screenPos.x, screenPos.y, tileColor, true, theme, isCliff, isBridge);
+        this.drawIsometricTile(this.tileMapGraphics, screenPos.x, screenPos.y, tileColor, true, theme, isCliff, isBridge, isLavaTile);
 
         if (this.obstacleGrid[y][x]) {
           this.drawIsometricObstacle(this.tileMapGraphics, screenPos.x, screenPos.y, theme);
@@ -987,7 +1037,46 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private drawIsometricTile(graphics: Phaser.GameObjects.Graphics, isoX: number, isoY: number, color: number, border: boolean, theme: string, isCliff = false, isBridge = false) {
+  private drawIsometricTile(graphics: Phaser.GameObjects.Graphics, isoX: number, isoY: number, color: number, border: boolean, theme: 'grass' | 'desert' | 'town' | 'dungeon', isCliff = false, isBridge = false, isLava = false) {
+    if (isLava) {
+      // --- D. BUBBLING LAVA PIT (이글거리는 마그마 용암) ---
+      // 1. Base glowing orange support depth
+      graphics.fillStyle(0x991b1b, 1.0); // deep red base
+      graphics.beginPath();
+      graphics.moveTo(isoX - this.halfTileWidth, isoY);
+      graphics.lineTo(isoX, isoY + this.halfTileHeight);
+      graphics.lineTo(isoX + this.halfTileWidth, isoY);
+      graphics.lineTo(isoX + this.halfTileWidth, isoY + 6);
+      graphics.lineTo(isoX, isoY + this.halfTileHeight + 6);
+      graphics.lineTo(isoX - this.halfTileWidth, isoY + 6);
+      graphics.closePath();
+      graphics.fillPath();
+
+      // 2. Liquid lava top surface
+      graphics.fillStyle(color, 1.0); // bright molten color
+      graphics.lineStyle(1.8, 0xf97316, 0.7); // Bright hot orange lava borders
+
+      graphics.beginPath();
+      graphics.moveTo(isoX, isoY - this.halfTileHeight);
+      graphics.lineTo(isoX + this.halfTileWidth, isoY);
+      graphics.lineTo(isoX, isoY + this.halfTileHeight);
+      graphics.lineTo(isoX - this.halfTileWidth, isoY);
+      graphics.closePath();
+      graphics.fillPath();
+      graphics.strokePath();
+
+      // 3. Draw a glowing core highlight inside lava tile to represent heat
+      graphics.fillStyle(0xfef08a, 0.45); // Soft yellow heat glow
+      graphics.beginPath();
+      graphics.moveTo(isoX, isoY - this.halfTileHeight * 0.4);
+      graphics.lineTo(isoX + this.halfTileWidth * 0.4, isoY);
+      graphics.lineTo(isoX, isoY + this.halfTileHeight * 0.4);
+      graphics.lineTo(isoX - this.halfTileWidth * 0.4, isoY);
+      graphics.closePath();
+      graphics.fillPath();
+      return;
+    }
+
     if (isCliff && !isBridge) {
       // --- A. 3D DEEP CANYON CLIFF (칠흑의 입체 낭떠러지) ---
       // 1. Draw 3D Cliff Side Facet (Downwards depth extrusion)
@@ -1446,6 +1535,10 @@ export class GameScene extends Phaser.Scene {
         poisonTurns: 0,
         bonusDmg: growth.bonusDmg + eqDmg
       };
+
+      if (char.isEnemy && char.name.includes('[BOSS]')) {
+        container.setScale(1.35);
+      }
 
       this.drawPedestal(char);
       this.updateDirectionVisual(char);
@@ -2201,6 +2294,70 @@ export class GameScene extends Phaser.Scene {
 
           if (c.hp <= 0) {
             this.handleDeath(c);
+          }
+        }
+
+        // 4. Process Lava (Molten magma check) DoT
+        if (c.hp > 0 && this.lavaGrid[c.y] && this.lavaGrid[c.y][c.x]) {
+          const lavaDamage = Math.floor(c.maxHp * 0.15);
+          c.hp = Math.max(0, c.hp - lavaDamage);
+          c.burnTurns = Math.max(c.burnTurns, 3); // Inflict Burn for 3 turns!
+          
+          this.drawPedestal(c);
+          this.updateMiniHUDBar(c);
+          if (this.selectedCharacter === c && !c.isEnemy) {
+            this.updateUIProfile(c);
+          }
+
+          this.showDamagePopup(c.gameObject, lavaDamage, false, '#f43f5e');
+
+          const effectText = this.add.text(c.gameObject.x, c.gameObject.y - 115, '🌋 용암지대 피해!', {
+            fontFamily: 'DungGeunMo, Pixelify Sans, monospace',
+            fontSize: '13px',
+            color: '#f43f5e',
+            stroke: '#000000',
+            strokeThickness: 3
+          }).setOrigin(0.5).setDepth(c.gameObject.depth + 101);
+
+          this.tweens.add({
+            targets: effectText,
+            y: effectText.y - 25,
+            alpha: 0,
+            duration: 1200 * this.animationSpeedMultiplier,
+            onComplete: () => effectText.destroy()
+          });
+
+          if (c.hp <= 0) {
+            this.handleDeath(c);
+          }
+        }
+
+        // 5. Boss Frenzy Passive Regeneration (Citadel Defiance)
+        if (c.hp > 0 && c.isEnemy && c.name.includes('[BOSS]') && c.hp / c.maxHp <= 0.5) {
+          const oldHp = c.hp;
+          const regenAmount = Math.floor(c.maxHp * 0.10);
+          c.hp = Math.min(c.maxHp, c.hp + regenAmount);
+          const realRegen = c.hp - oldHp;
+
+          if (realRegen > 0) {
+            this.drawPedestal(c);
+            this.updateMiniHUDBar(c);
+
+            const regenText = this.add.text(c.gameObject.x, c.gameObject.y - 115, `💚 재생 +${realRegen}`, {
+              fontFamily: 'DungGeunMo, Pixelify Sans, monospace',
+              fontSize: '14px',
+              color: '#4ade80',
+              stroke: '#000000',
+              strokeThickness: 3.5
+            }).setOrigin(0.5).setDepth(c.gameObject.depth + 101);
+
+            this.tweens.add({
+              targets: regenText,
+              y: regenText.y - 30,
+              alpha: 0,
+              duration: 1200 * this.animationSpeedMultiplier,
+              onComplete: () => regenText.destroy()
+            });
           }
         }
       }
@@ -3142,7 +3299,11 @@ export class GameScene extends Phaser.Scene {
       }
 
       const baseDamage = attacker.isEnemy ? 25 : (36 + (attacker.bonusDmg || 0));
-      const finalDamage = Math.floor(baseDamage * (0.9 + Math.random() * 0.2));
+      let finalDamage = Math.floor(baseDamage * (0.9 + Math.random() * 0.2));
+
+      if (defender.isEnemy && defender.name.includes('[BOSS]') && defender.hp / defender.maxHp <= 0.5) {
+        finalDamage = Math.floor(finalDamage * 0.7);
+      }
 
       defender.hp = Math.max(0, defender.hp - finalDamage);
       this.updateMiniHUDBar(defender);
@@ -3456,6 +3617,10 @@ export class GameScene extends Phaser.Scene {
       damage = Math.floor(damage * 1.5);
     }
 
+    if (defender.isEnemy && defender.name.includes('[BOSS]') && defender.hp / defender.maxHp <= 0.5) {
+      damage = Math.floor(damage * 0.7);
+    }
+
     defender.hp = Math.max(0, defender.hp - damage);
     this.updateMiniHUDBar(defender);
 
@@ -3642,6 +3807,128 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  private spawnBossMinion() {
+    const borderPoints = [
+      { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 1, y: 2 },
+      { x: this.gridWidth - 2, y: 1 }, { x: 1, y: this.gridHeight - 2 }
+    ];
+    let spawnPt = borderPoints[0];
+    for (let pt of borderPoints) {
+      const isOccupied = this.characters.some(c => c.x === pt.x && c.y === pt.y && c.hp > 0);
+      if (!isOccupied) {
+        spawnPt = pt;
+        break;
+      }
+    }
+
+    const minionPreset = { type: 'gob_warrior', name: '요새 정예 수비병 [소환]', x: spawnPt.x, y: spawnPt.y };
+    const spec = {
+      isEnemy: true,
+      maxHp: 90,
+      maxAp: 3,
+      maxMp: 0,
+      moveRange: 4,
+      minAttackRange: 1,
+      maxAttackRange: 1,
+      spriteKey: 'goblin_warrior',
+      avatar: '🗡️',
+      scale: 1.0,
+      spells: []
+    };
+
+    const container = this.add.container(0, 0);
+    container.add(this.add.ellipse(0, 0, 48, 24, 0x000000, 0.4));
+
+    const glow = this.add.ellipse(0, 0, 68, 34, 0xf97316, 0.7).setVisible(false);
+    container.add(glow);
+
+    const sprite = this.add.image(0, -28, 'goblin').setScale(1.0).setOrigin(0.5, 0.95).setVisible(false);
+    container.add(sprite);
+
+    const pillar = this.add.graphics();
+    container.add(pillar);
+
+    const emblemStrokeColor = 0xf97316;
+    const emblemBg = 0x450a0a;
+    const emblem = this.add.circle(0, -24, 20, emblemBg).setStrokeStyle(2.5, emblemStrokeColor, 1);
+    const text = this.add.text(0, -24, spec.avatar, { fontSize: '20px', fontFamily: 'Segoe UI Emoji, Arial' }).setOrigin(0.5);
+    container.add(emblem);
+    container.add(text);
+
+    const dirGraphics = this.add.graphics();
+    container.add(dirGraphics);
+
+    const screenPos = this.gridToScreen(spawnPt.x, spawnPt.y);
+    container.setPosition(screenPos.x, screenPos.y);
+
+    const char: Character = {
+      name: minionPreset.name,
+      x: spawnPt.x,
+      y: spawnPt.y,
+      hp: spec.maxHp,
+      maxHp: spec.maxHp,
+      mp: 0,
+      maxMp: 0,
+      ap: 0,
+      maxAp: spec.maxAp,
+      avatar: spec.avatar,
+      isEnemy: true,
+      gameObject: container,
+      moveRange: spec.moveRange,
+      minAttackRange: spec.minAttackRange,
+      maxAttackRange: spec.maxAttackRange,
+      hasMovedThisTurn: false,
+      hasAttackedThisTurn: false,
+      bodyEmblem: emblem,
+      bodyText: text,
+      bodySprite: sprite,
+      bodyParts: [pillar],
+      glowRing: glow,
+      direction: 'SE',
+      dirGraphics: dirGraphics,
+      skinType: 'gob_warrior',
+      spells: [],
+      burnTurns: 0,
+      stunTurns: 0,
+      poisonTurns: 0,
+      bonusDmg: 0
+    };
+
+    this.drawPedestal(char);
+    this.updateDirectionVisual(char);
+    this.characters.push(char);
+
+    const magicCircle = this.add.graphics();
+    magicCircle.setDepth(container.depth + 1);
+    magicCircle.lineStyle(2.5, 0xef4444, 0.8);
+    magicCircle.strokeCircle(screenPos.x, screenPos.y, 35);
+    magicCircle.scaleY = 0.5;
+
+    this.tweens.add({
+      targets: magicCircle,
+      alpha: 0,
+      scaleX: 1.6,
+      scaleY: 0.8,
+      duration: 1000,
+      onComplete: () => magicCircle.destroy()
+    });
+
+    for (let i = 0; i < 6; i++) {
+      const line = this.add.graphics();
+      line.lineStyle(1.5, 0xef4444, 0.9);
+      line.lineBetween(screenPos.x + Phaser.Math.Between(-20, 20), screenPos.y + 40, screenPos.x + Phaser.Math.Between(-20, 20), screenPos.y - 80);
+      this.tweens.add({
+        targets: line,
+        alpha: 0,
+        y: line.y - 40,
+        duration: 800,
+        onComplete: () => line.destroy()
+      });
+    }
+
+    this.showDialogue('부족장 그로그', '내 부하들아, 전장에 나서라!', 1500);
+  }
+
   private runSingleEnemyAI(enemy: Character, onComplete: () => void) {
     this.showDialogue(enemy.name, '행동을 개시한다.', 1000);
 
@@ -3669,6 +3956,157 @@ export class GameScene extends Phaser.Scene {
       });
 
       // Define sequential AI behavior steps
+      const attemptBossSpecialSpell = (afterBossCallback: () => void) => {
+        if (this.isGameOver || enemy.hp <= 0 || !enemy.name.includes('[BOSS]')) {
+          afterBossCallback();
+          return;
+        }
+
+        const distToPlayer = Math.abs(enemy.x - closestPlayer.x) + Math.abs(enemy.y - closestPlayer.y);
+
+        // Skill 1: Chieftain's Wrath (Earthquake Smash) - Cost: 3 AP, 3 MP. Target in 3-tile range.
+        if (enemy.ap >= 3 && enemy.mp >= 3 && distToPlayer <= 3) {
+          enemy.ap -= 3;
+          enemy.mp -= 3;
+          enemy.hasAttackedThisTurn = true;
+
+          this.showDialogue(enemy.name, '⚡ 군주의 진노! 지면 강타!', 1500);
+
+          const targetCoords = [
+            { x: closestPlayer.x, y: closestPlayer.y },
+            { x: closestPlayer.x + 1, y: closestPlayer.y },
+            { x: closestPlayer.x - 1, y: closestPlayer.y },
+            { x: closestPlayer.x, y: closestPlayer.y + 1 },
+            { x: closestPlayer.x, y: closestPlayer.y - 1 }
+          ];
+
+          this.cameras.main.shake(300, 0.012);
+
+          targetCoords.forEach(pt => {
+            if (pt.x >= 0 && pt.x < this.gridWidth && pt.y >= 0 && pt.y < this.gridHeight) {
+              const scr = this.gridToScreen(pt.x, pt.y);
+              
+              const ring = this.add.graphics();
+              ring.lineStyle(2.5, 0xef4444, 0.95);
+              ring.strokeCircle(scr.x, scr.y, 10);
+              ring.scaleY = 0.5;
+
+              this.tweens.add({
+                targets: ring,
+                scaleX: 3.5,
+                scaleY: 1.75,
+                alpha: 0,
+                duration: 600,
+                onComplete: () => ring.destroy()
+              });
+
+              const hitPlayer = this.characters.find(c => c.x === pt.x && c.y === pt.y && !c.isEnemy && c.hp > 0);
+              if (hitPlayer) {
+                const dmg = Phaser.Math.Between(35, 45);
+                hitPlayer.hp = Math.max(0, hitPlayer.hp - dmg);
+                hitPlayer.stunTurns = Math.max(hitPlayer.stunTurns, 1);
+
+                this.drawPedestal(hitPlayer);
+                this.updateMiniHUDBar(hitPlayer);
+                if (this.selectedCharacter === hitPlayer) {
+                  this.updateUIProfile(hitPlayer);
+                }
+
+                this.showDamagePopup(hitPlayer.gameObject, dmg, false, '#ef4444');
+
+                const stText = this.add.text(hitPlayer.gameObject.x, hitPlayer.gameObject.y - 120, '⚡ 기절 마비!', {
+                  fontFamily: 'DungGeunMo, Pixelify Sans, monospace',
+                  fontSize: '13px',
+                  color: '#38bdf8',
+                  stroke: '#000000',
+                  strokeThickness: 3.5
+                }).setOrigin(0.5).setDepth(hitPlayer.gameObject.depth + 102);
+
+                this.tweens.add({
+                  targets: stText,
+                  y: stText.y - 20,
+                  alpha: 0,
+                  duration: 1000,
+                  onComplete: () => stText.destroy()
+                });
+
+                if (hitPlayer.hp <= 0) {
+                  this.handleDeath(hitPlayer);
+                }
+              }
+            }
+          });
+
+          this.time.delayedCall(1200 * this.animationSpeedMultiplier, () => {
+            afterBossCallback();
+          });
+          return;
+        }
+
+        // Skill 2: Chieftain's Call (Roar & Spawn) - Cost: 2 AP, 2 MP. Target in 3.5 range.
+        if (enemy.ap >= 2 && enemy.mp >= 2 && distToPlayer <= 3.5) {
+          enemy.ap -= 2;
+          enemy.mp -= 2;
+
+          this.showDialogue(enemy.name, '😈 군주의 포효! 대지를 부른다!', 1500);
+
+          const bossScr = this.gridToScreen(enemy.x, enemy.y);
+          const roarRing = this.add.graphics();
+          roarRing.lineStyle(3, 0xf97316, 0.85);
+          roarRing.strokeCircle(bossScr.x, bossScr.y, 25);
+          roarRing.scaleY = 0.5;
+
+          this.tweens.add({
+            targets: roarRing,
+            scaleX: 5.0,
+            scaleY: 2.5,
+            alpha: 0,
+            duration: 800,
+            onComplete: () => roarRing.destroy()
+          });
+
+          this.characters.forEach(c => {
+            if (c.hp > 0 && !c.isEnemy) {
+              const d = Math.abs(enemy.x - c.x) + Math.abs(enemy.y - c.y);
+              if (d <= 2.5) {
+                const oldMp = c.mp;
+                c.mp = Math.max(0, c.mp - 2);
+                const lostMp = oldMp - c.mp;
+
+                if (lostMp > 0) {
+                  this.updateMiniHUDBar(c);
+                  if (this.selectedCharacter === c) this.updateUIProfile(c);
+
+                  const mnText = this.add.text(c.gameObject.x, c.gameObject.y - 110, `🔮 마나 소멸 -${lostMp}`, {
+                    fontFamily: 'DungGeunMo, Pixelify Sans, monospace',
+                    fontSize: '12px',
+                    color: '#c084fc',
+                    stroke: '#000000',
+                    strokeThickness: 3
+                  }).setOrigin(0.5).setDepth(c.gameObject.depth + 102);
+
+                  this.tweens.add({
+                    targets: mnText,
+                    y: mnText.y - 20,
+                    alpha: 0,
+                    duration: 1000,
+                    onComplete: () => mnText.destroy()
+                  });
+                }
+              }
+            }
+          });
+
+          this.spawnBossMinion();
+
+          this.time.delayedCall(1200 * this.animationSpeedMultiplier, () => {
+            afterBossCallback();
+          });
+          return;
+        }
+
+        afterBossCallback();
+      };
       const attemptSpell = (afterSpellCallback: () => void) => {
         if (this.isGameOver || enemy.hp <= 0) {
           afterSpellCallback();
@@ -3799,17 +4237,14 @@ export class GameScene extends Phaser.Scene {
       };
 
       // Execution Pipeline:
-      // Step 1: Try to cast spell first
-      attemptSpell(() => {
-        // Step 2: Try to attack next (melee/ranged physical)
-        attemptAttack(() => {
-          // Step 3: Try to move closer if not yet in range
-          attemptMovement(() => {
-            // Step 4: Try to cast spell again after movement
-            attemptSpell(() => {
-              // Step 5: Try to attack again after movement
-              attemptAttack(() => {
-                onComplete();
+      attemptBossSpecialSpell(() => {
+        attemptSpell(() => {
+          attemptAttack(() => {
+            attemptMovement(() => {
+              attemptSpell(() => {
+                attemptAttack(() => {
+                  onComplete();
+                });
               });
             });
           });
