@@ -203,6 +203,7 @@ export class GameScene extends Phaser.Scene {
 
   private sharedInventory: Item[] = [];
   private selectedAcademyHeroKey = 'warrior';
+  private spawnedAllyKeys: string[] = [];
 
   private endgameResult: 'VICTORY' | 'DEFEAT' | 'COMPLETE' = 'VICTORY';
 
@@ -1418,7 +1419,7 @@ export class GameScene extends Phaser.Scene {
           { name: '더블 샷', cost: 2, rangeMin: 2, rangeMax: 4, type: 'Single', effectType: 'damage' }
         ]
       },
-      gob_shaman: {
+        gob_shaman: {
         avatar: '🧙‍♂️', maxHp: 55, maxMp: 5, maxAp: 3, moveRange: 3, minAttackRange: 2, maxAttackRange: 3, spriteKey: 'char_goblin_boss', scale: 1.92, baseColor: 0x881337, topColor: 0xf43f5e, isEnemy: true,
         spells: [
           { name: '다크 스피어', cost: 3, rangeMin: 2, rangeMax: 3, type: 'AoE', effectType: 'damage', debuffType: 'stun' },
@@ -1443,9 +1444,15 @@ export class GameScene extends Phaser.Scene {
 
     const spawnPresets = [...stage.allies, ...stage.enemies];
 
+    this.spawnedAllyKeys = [];
+
     spawnPresets.forEach(preset => {
       const spec = UNIT_SPECS[preset.type];
       if (!spec) return;
+
+      if (!spec.isEnemy && !this.spawnedAllyKeys.includes(preset.type)) {
+        this.spawnedAllyKeys.push(preset.type);
+      }
 
       let spawnX = preset.x;
       let spawnY = preset.y;
@@ -5402,7 +5409,7 @@ export class GameScene extends Phaser.Scene {
       { key: 'archer', name: '로이 (Roy)', avatar: '🏹', baseHp: 110, baseMp: 4, baseMove: 4 },
       { key: 'cleric', name: '세라 (Sera)', avatar: '💚', baseHp: 100, baseMp: 5, baseMove: 3 },
       { key: 'rogue', name: '카엘 (Kael)', avatar: '🗡️', baseHp: 120, baseMp: 4, baseMove: 5 }
-    ];
+    ].filter(h => this.spawnedAllyKeys.length === 0 || this.spawnedAllyKeys.includes(h.key));
 
     heroes.forEach(h => {
       const growth = this.allyGrowthStats[h.key] || { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null, isPromoted: false };
@@ -5514,6 +5521,27 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateAcademyEquipTab() {
+    const selBtns = document.querySelectorAll('.hero-sel-btn');
+    selBtns.forEach(btn => {
+      const heroKey = btn.getAttribute('data-hero');
+      if (heroKey) {
+        const isSpawned = this.spawnedAllyKeys.length === 0 || this.spawnedAllyKeys.includes(heroKey);
+        (btn as HTMLElement).style.display = isSpawned ? 'inline-block' : 'none';
+      }
+    });
+
+    if (this.spawnedAllyKeys.length > 0 && !this.spawnedAllyKeys.includes(this.selectedAcademyHeroKey)) {
+      this.selectedAcademyHeroKey = this.spawnedAllyKeys[0];
+      selBtns.forEach(btn => {
+        const hk = btn.getAttribute('data-hero');
+        if (hk === this.selectedAcademyHeroKey) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      });
+    }
+
     const growth = this.allyGrowthStats[this.selectedAcademyHeroKey];
     if (!growth) return;
 
