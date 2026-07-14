@@ -938,3 +938,45 @@ body, html {
   color: #38bdf8;
   font-weight: bold;
 }
+
+/* Roguelike Rune Card Elements */
+.rune-card {
+  background: rgba(30, 27, 75, 0.45);
+  border: 2px solid rgba(168, 85, 247, 0.35);
+  border-radius: 12px;
+  padding: 20px 15px;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.rune-card:hover {
+  transform: translateY(-5px) scale(1.03);
+  border-color: #c084fc;
+  background: rgba(30, 27, 75, 0.7);
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.4);
+}
+
+.rune-icon {
+  font-size: 2.2rem;
+  margin-bottom: 5px;
+  filter: drop-shadow(0 0 6px rgba(168, 85, 247, 0.6));
+}
+
+.rune-title {
+  font-family: 'DungGeunMo', monospace;
+  font-size: 1.05rem;
+  color: #fef08a;
+  text-shadow: 0 0 5px rgba(254, 240, 138, 0.3);
+}
+
+.rune-desc {
+  font-size: 0.75rem;
+  color: #cbd5e1;
+  line-height: 1.4;
+  word-break: keep-all;
+}

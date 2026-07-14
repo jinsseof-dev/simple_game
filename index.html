@@ -91,6 +91,7 @@
           <button id="btn-attack" class="game-btn" disabled>공격 (Attack)</button>
           <button id="btn-spell-1" class="game-btn" disabled>스킬 1 (Skill 1)</button>
           <button id="btn-spell-2" class="game-btn" disabled>스킬 2 (Skill 2)</button>
+          <button id="btn-spell-3" class="game-btn" disabled>궁극기 (Ultimate)</button>
           <button id="btn-wait" class="game-btn">대기 (Wait)</button>
           <button id="btn-end-turn" class="game-btn highlight">턴 종료 (End Turn)</button>
         </div>
@@ -103,6 +104,37 @@
         <div class="dialogue-prompt">Click to continue...</div>
       </div>
       
+      <!-- Game Mode Selection Modal (First Stage Start) -->
+      <div id="mode-selection-overlay" class="overlay-modal">
+        <div class="modal-content glass-panel" style="max-width: 480px; text-align: center;">
+          <h2 style="color: #38bdf8; text-shadow: 0 0 10px rgba(56,189,248,0.5); font-family: DungGeunMo, Pixelify Sans, monospace; margin-bottom: 10px;">🛡️ 전술 모드 선택지 🛡️</h2>
+          <p style="font-size: 0.85rem; color: #cbd5e1; margin-bottom: 20px;">이번 여정에서 사용할 게임 모드를 선택하십시오.</p>
+          
+          <div style="display: flex; flex-direction: column; gap: 15px;">
+            <button id="btn-mode-classic" class="game-btn highlight" style="padding: 12px; font-size: 0.95rem; font-family: DungGeunMo, monospace;">
+              🏆 클래식 모드 (Classic)<br>
+              <span style="font-size: 0.72rem; color: #94a3b8; font-weight: normal; display: block; margin-top: 4px;">순수한 SRPG 턴제 전술과 별 3개 도전과제 시스템이 작동합니다.</span>
+            </button>
+            <button id="btn-mode-rune" class="game-btn highlight" style="padding: 12px; font-size: 0.95rem; font-family: DungGeunMo, monospace; border: 2px solid #facc15;">
+              🔮 로그라이트 룬 모드 (Rune Mode) ★추천★<br>
+              <span style="font-size: 0.72rem; color: #fef08a; font-weight: normal; display: block; margin-top: 4px;">매 스테이지 격파 시 강력한 버프 룬 카드를 영구 선택해 누적합니다.</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Roguelike Rune Selection Modal -->
+      <div id="rune-selection-overlay" class="overlay-modal hidden">
+        <div class="modal-content glass-panel" style="max-width: 680px; text-align: center; border: 2px solid #a855f7;">
+          <h2 style="color: #c084fc; text-shadow: 0 0 12px rgba(168,85,247,0.5); font-family: DungGeunMo, Pixelify Sans, monospace; margin-bottom: 5px;">🔮 로그라이트 전술 룬 선택 🔮</h2>
+          <p style="font-size: 0.85rem; color: #e2e8f0; margin-bottom: 20px;">아군 전체에 귀속될 강력한 패시브 룬 문양을 선택하십시오.</p>
+          
+          <div id="rune-cards-container" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px;">
+            <!-- Dynamically populated cards -->
+          </div>
+        </div>
+      </div>
+
       <!-- Stage Clear Overlay Modal -->
       <div id="stage-clear-overlay" class="overlay-modal hidden">
         <div class="modal-content glass-panel">

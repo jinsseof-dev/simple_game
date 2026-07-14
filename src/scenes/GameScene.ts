@@ -206,6 +206,12 @@ export class GameScene extends Phaser.Scene {
 
   private endgameResult: 'VICTORY' | 'DEFEAT' | 'COMPLETE' = 'VICTORY';
 
+  // Roguelike Runes and Star Challenges State
+  private isRuneModeEnabled = false;
+  private activeRunes: string[] = [];
+  private stageLavaDamaged = false;
+  private stageRetreatedCount = 0;
+
   // Direction Selection Mode
   private isDirectionSelectMode = false;
   private isPostMoveDirectionSelect = false; // true if triggered automatically after moving
@@ -276,6 +282,28 @@ export class GameScene extends Phaser.Scene {
 
     // Bind DOM UI Events
     this.bindDOMEvents();
+
+    // Game Mode Selection Modal bindings
+    const modeOverlay = document.getElementById('mode-selection-overlay');
+    const btnClassic = document.getElementById('btn-mode-classic');
+    const btnRune = document.getElementById('btn-mode-rune');
+    
+    if (this.currentStageIndex > 0) {
+      modeOverlay?.classList.add('hidden');
+    }
+
+    if (btnClassic && btnRune && modeOverlay) {
+      btnClassic.addEventListener('click', () => {
+        this.isRuneModeEnabled = false;
+        modeOverlay.classList.add('hidden');
+        this.showDialogue('SYSTEM', '🏆 클래식 모드가 적용되었습니다.', 1500);
+      });
+      btnRune.addEventListener('click', () => {
+        this.isRuneModeEnabled = true;
+        modeOverlay.classList.add('hidden');
+        this.showDialogue('SYSTEM', '🔮 로그라이트 룬 모드가 활성화되었습니다!', 1800);
+      });
+    }
 
     // Disable browser right click context menu
     this.input.mouse?.disableContextMenu();
@@ -1247,6 +1275,10 @@ export class GameScene extends Phaser.Scene {
     const stage = STAGE_PRESETS[stageIndex];
     if (!stage) return;
 
+    // Reset Star Challenges trackers
+    this.stageLavaDamaged = false;
+    this.stageRetreatedCount = 0;
+
     // Reset camera scroll position and compute adaptive zoom
     this.cameras.main.setScroll(0, 0);
     let zoom = 1.0;
@@ -1506,6 +1538,9 @@ export class GameScene extends Phaser.Scene {
       let finalMaxHp = spec.isEnemy ? Math.floor(spec.maxHp * difficultyMultiplier) : (spec.maxHp + growth.bonusHp + eqHp);
       let finalMaxMp = spec.maxMp + growth.bonusMp;
       let finalMoveRange = spec.moveRange + growth.bonusMove;
+      if (!spec.isEnemy && this.activeRunes.includes('wind_walk')) {
+        finalMoveRange += 1;
+      }
       let finalMaxAttackRange = spec.maxAttackRange;
       let finalBonusDmg = growth.bonusDmg + eqDmg;
 
@@ -2076,42 +2111,66 @@ export class GameScene extends Phaser.Scene {
     const btnAttack = document.getElementById('btn-attack') as HTMLButtonElement;
     const btnSpell1 = document.getElementById('btn-spell-1') as HTMLButtonElement;
     const btnSpell2 = document.getElementById('btn-spell-2') as HTMLButtonElement;
+    const btnSpell3 = document.getElementById('btn-spell-3') as HTMLButtonElement;
     const btnWait = document.getElementById('btn-wait') as HTMLButtonElement;
     const btnEnd = document.getElementById('btn-end-turn') as HTMLButtonElement;
 
-    if (btnMove && btnTurn && btnAttack && btnSpell1 && btnSpell2 && btnWait && btnEnd) {
+    if (btnMove && btnTurn && btnAttack && btnSpell1 && btnSpell2 && btnSpell3 && btnWait && btnEnd) {
       if (isAnimating || this.isGameOver || !this.selectedCharacter || this.selectedCharacter.isEnemy) {
         btnMove.disabled = true;
         btnTurn.disabled = true;
         btnAttack.disabled = true;
         btnSpell1.disabled = true;
         btnSpell2.disabled = true;
+        btnSpell3.disabled = true;
         btnWait.disabled = true;
         btnEnd.disabled = this.isGameOver || isAnimating; 
       } else if (isPlayerTurn) {
         const char = this.selectedCharacter;
         const spell1 = char.spells[0];
         const spell2 = char.spells[1];
+        const spell3 = char.spells[2];
 
-        const canUseSpell1 = spell1 && char.mp >= spell1.cost && char.ap >= spell1.cost && !char.hasAttackedThisTurn;
-        const canUseSpell2 = spell2 && char.mp >= spell2.cost && char.ap >= spell2.cost && !char.hasAttackedThisTurn;
+        let cost1 = spell1 ? spell1.cost : 99;
+        let cost2 = spell2 ? spell2.cost : 99;
+        let cost3 = spell3 ? spell3.cost : 99;
+
+        if (!char.isEnemy && this.activeRunes.includes('mp_accel')) {
+          cost1 = Math.max(1, cost1 - 1);
+          cost2 = Math.max(1, cost2 - 1);
+          cost3 = Math.max(1, cost3 - 1);
+        }
+
+        const canUseSpell1 = spell1 && char.mp >= cost1 && char.ap >= cost1 && !char.hasAttackedThisTurn;
+        const canUseSpell2 = spell2 && char.mp >= cost2 && char.ap >= cost2 && !char.hasAttackedThisTurn;
+        const canUseSpell3 = spell3 && char.mp >= cost3 && char.ap >= cost3 && !char.hasAttackedThisTurn;
 
         btnMove.disabled = char.hasMovedThisTurn || char.hasAttackedThisTurn;
         btnTurn.disabled = char.hasAttackedThisTurn; 
         btnAttack.disabled = char.ap <= 0 || char.hasAttackedThisTurn;
         btnSpell1.disabled = !canUseSpell1;
         btnSpell2.disabled = !canUseSpell2;
+        btnSpell3.disabled = !canUseSpell3;
         
         if (spell1) {
-          btnSpell1.innerText = `${spell1.name} (🔮${spell1.cost})`;
+          btnSpell1.innerText = `${spell1.name} (🔮${cost1})`;
         } else {
           btnSpell1.innerText = '스킬 1';
         }
 
         if (spell2) {
-          btnSpell2.innerText = `${spell2.name} (🔮${spell2.cost})`;
+          btnSpell2.innerText = `${spell2.name} (🔮${cost2})`;
         } else {
           btnSpell2.innerText = '스킬 2';
+        }
+
+        if (spell3) {
+          btnSpell3.innerText = `${spell3.name} (🔮${cost3})`;
+          btnSpell3.style.display = 'inline-block';
+        } else {
+          btnSpell3.innerText = '궁극기 미해제';
+          btnSpell3.disabled = true;
+          btnSpell3.style.display = 'none';
         }
 
         btnWait.disabled = char.hasMovedThisTurn && char.hasAttackedThisTurn;
@@ -2122,6 +2181,7 @@ export class GameScene extends Phaser.Scene {
         btnAttack.disabled = true;
         btnSpell1.disabled = true;
         btnSpell2.disabled = true;
+        btnSpell3.disabled = true;
         btnWait.disabled = true;
         btnEnd.disabled = true;
       }
@@ -2355,6 +2415,9 @@ export class GameScene extends Phaser.Scene {
           const lavaDamage = Math.floor(c.maxHp * 0.15);
           c.hp = Math.max(0, c.hp - lavaDamage);
           c.burnTurns = Math.max(c.burnTurns, 3); // Inflict Burn for 3 turns!
+          if (!c.isEnemy) {
+            this.stageLavaDamaged = true;
+          }
           
           this.drawPedestal(c);
           this.updateMiniHUDBar(c);
@@ -2573,10 +2636,12 @@ export class GameScene extends Phaser.Scene {
 
     const btnSpell1 = document.getElementById('btn-spell-1');
     const btnSpell2 = document.getElementById('btn-spell-2');
+    const btnSpell3 = document.getElementById('btn-spell-3');
 
     const clearSpellHighlights = () => {
       if (btnSpell1) btnSpell1.classList.remove('highlight');
       if (btnSpell2) btnSpell2.classList.remove('highlight');
+      if (btnSpell3) btnSpell3.classList.remove('highlight');
     };
 
     if (btnSpell1) {
@@ -2584,7 +2649,11 @@ export class GameScene extends Phaser.Scene {
         if (this.turnManager.getState() !== 'PLAYER_TURN' || !this.selectedCharacter || this.isGameOver) return;
         const char = this.selectedCharacter;
         const spell = char.spells[0];
-        const canUseSpell = spell && char.mp >= spell.cost && char.ap > 0 && !char.hasAttackedThisTurn;
+        let cost = spell ? spell.cost : 99;
+        if (!char.isEnemy && this.activeRunes.includes('mp_accel')) {
+          cost = Math.max(1, cost - 1);
+        }
+        const canUseSpell = spell && char.mp >= cost && char.ap > 0 && !char.hasAttackedThisTurn;
         if (!canUseSpell) return;
 
         this.selectedSpellIndex = 0;
@@ -2609,7 +2678,11 @@ export class GameScene extends Phaser.Scene {
         if (this.turnManager.getState() !== 'PLAYER_TURN' || !this.selectedCharacter || this.isGameOver) return;
         const char = this.selectedCharacter;
         const spell = char.spells[1];
-        const canUseSpell = spell && char.mp >= spell.cost && char.ap > 0 && !char.hasAttackedThisTurn;
+        let cost = spell ? spell.cost : 99;
+        if (!char.isEnemy && this.activeRunes.includes('mp_accel')) {
+          cost = Math.max(1, cost - 1);
+        }
+        const canUseSpell = spell && char.mp >= cost && char.ap > 0 && !char.hasAttackedThisTurn;
         if (!canUseSpell) return;
 
         this.selectedSpellIndex = 1;
@@ -2625,6 +2698,35 @@ export class GameScene extends Phaser.Scene {
 
         if (this.isSpellMode) {
           btnSpell2.classList.add('highlight');
+        }
+      });
+    }
+
+    if (btnSpell3) {
+      btnSpell3.addEventListener('click', () => {
+        if (this.turnManager.getState() !== 'PLAYER_TURN' || !this.selectedCharacter || this.isGameOver) return;
+        const char = this.selectedCharacter;
+        const spell = char.spells[2];
+        let cost = spell ? spell.cost : 99;
+        if (!char.isEnemy && this.activeRunes.includes('mp_accel')) {
+          cost = Math.max(1, cost - 1);
+        }
+        const canUseSpell = spell && char.mp >= cost && char.ap > 0 && !char.hasAttackedThisTurn;
+        if (!canUseSpell) return;
+
+        this.selectedSpellIndex = 2;
+        this.isSpellMode = true;
+        this.isMovementMode = false;
+        this.isAttackMode = false;
+        this.isDirectionSelectMode = false;
+        
+        if (btnMove) btnMove.classList.remove('highlight');
+        if (btnTurn) btnTurn.classList.remove('highlight');
+        if (btnAttack) btnAttack.classList.remove('highlight');
+        clearSpellHighlights();
+
+        if (this.isSpellMode) {
+          btnSpell3.classList.add('highlight');
         }
       });
     }
@@ -2783,7 +2885,13 @@ export class GameScene extends Phaser.Scene {
         this.isGameOver = false;
 
         if (this.endgameResult === 'VICTORY') {
-          this.openAcademyModal();
+          if (this.isRuneModeEnabled) {
+            this.showRuneSelectionModal(() => {
+              this.openAcademyModal();
+            });
+          } else {
+            this.openAcademyModal();
+          }
         } else if (this.endgameResult === 'COMPLETE') {
           this.resetPermanentGrowth();
           this.loadStage(0);
@@ -3178,8 +3286,12 @@ export class GameScene extends Phaser.Scene {
     this.turnManager.setState('ANIMATING');
 
     // Consume MP & AP (Consume AP/Cost based on spell cost)
-    attacker.mp = Math.max(0, attacker.mp - spell.cost);
-    attacker.ap = Math.max(0, attacker.ap - spell.cost);
+    let finalCost = spell.cost;
+    if (!attacker.isEnemy && this.activeRunes.includes('mp_accel')) {
+      finalCost = Math.max(1, finalCost - 1);
+    }
+    attacker.mp = Math.max(0, attacker.mp - finalCost);
+    attacker.ap = Math.max(0, attacker.ap - finalCost);
     attacker.hasAttackedThisTurn = true;
 
     // Face targeting direction
@@ -3509,6 +3621,11 @@ export class GameScene extends Phaser.Scene {
       const baseDamage = attacker.isEnemy ? 25 : (36 + (attacker.bonusDmg || 0));
       let finalDamage = Math.floor(baseDamage * (0.9 + Math.random() * 0.2));
 
+      // iron_will: 40% dmg reduction for ally under 30% HP
+      if (!defender.isEnemy && this.activeRunes.includes('iron_will') && (defender.hp / defender.maxHp <= 0.3)) {
+        finalDamage = Math.floor(finalDamage * 0.6);
+      }
+
       if (defender.isInvincible) {
         finalDamage = 0;
       }
@@ -3584,6 +3701,12 @@ export class GameScene extends Phaser.Scene {
           duration: 1000,
           onComplete: () => effectText.destroy()
         });
+      }
+
+      // toxic_breath: inflict 2 turns poison on spell hits
+      if (!attacker.isEnemy && this.activeRunes.includes('toxic_breath') && finalDamage > 0) {
+        defender.poisonTurns = Math.max(defender.poisonTurns, 2);
+        this.drawPedestal(defender);
       }
 
       this.tweens.add({
@@ -3833,6 +3956,11 @@ export class GameScene extends Phaser.Scene {
       damage = Math.floor(damage * 0.7);
     }
 
+    // iron_will: 40% dmg reduction for ally under 30% HP
+    if (!defender.isEnemy && this.activeRunes.includes('iron_will') && (defender.hp / defender.maxHp <= 0.3)) {
+      damage = Math.floor(damage * 0.6);
+    }
+
     const wasInvincible = !!defender.isInvincible;
     if (wasInvincible) {
       damage = 0;
@@ -3843,6 +3971,20 @@ export class GameScene extends Phaser.Scene {
 
     if (this.selectedCharacter === defender && !defender.isEnemy) {
       this.updateUIProfile(defender);
+    }
+
+    // vamp: 20% lifesteal on physical attack
+    if (!attacker.isEnemy && this.activeRunes.includes('vamp') && damage > 0) {
+      const healAmt = Math.floor(damage * 0.2);
+      attacker.hp = Math.min(attacker.maxHp, attacker.hp + healAmt);
+      this.updateMiniHUDBar(attacker);
+      this.showDamagePopup(attacker.gameObject, -healAmt, false, '#10b981');
+    }
+
+    // fire_touch: inflict 2 turns burn on physical hit
+    if (!attacker.isEnemy && this.activeRunes.includes('fire_touch') && damage > 0) {
+      defender.burnTurns = Math.max(defender.burnTurns, 2);
+      this.drawPedestal(defender);
     }
 
     if (wasInvincible) {
@@ -3941,6 +4083,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private handleDeath(char: Character) {
+    if (!char.isEnemy) {
+      this.stageRetreatedCount++;
+    }
     this.tweens.add({
       targets: char.gameObject,
       alpha: 0,
@@ -3979,10 +4124,6 @@ export class GameScene extends Phaser.Scene {
     this.updateActionButtonStates();
     this.endgameResult = result;
 
-    if (result === 'VICTORY') {
-      this.trainingSpheres += 3;
-    }
-
     const overlay = document.getElementById('stage-clear-overlay');
     const title = document.getElementById('modal-title');
     const desc = document.getElementById('modal-desc');
@@ -3992,10 +4133,32 @@ export class GameScene extends Phaser.Scene {
       overlay.classList.remove('hidden');
       
       if (result === 'VICTORY') {
+        const maxTurns = this.currentStageIndex < 3 ? 8 : (this.currentStageIndex < 6 ? 10 : (this.currentStageIndex < 9 ? 12 : 15));
+        const isTimeStar = this.turnManager.getTurnNumber() <= maxTurns;
+        const isGimmickStar = (this.currentStageIndex % 2 === 0) ? !this.stageLavaDamaged : (this.stageRetreatedCount === 0);
+        
+        let starCount = 1;
+        if (isTimeStar) starCount++;
+        if (isGimmickStar) starCount++;
+        
+        this.trainingSpheres += (1 + starCount);
+
         title.innerText = 'STAGE CLEAR';
         title.style.color = '#10b981';
         title.style.textShadow = '0 0 15px rgba(16, 185, 129, 0.6)';
-        desc.innerText = `${STAGE_PRESETS[this.currentStageIndex].name} 완료!\n보상으로 훈련 스피어 🌟 3개를 획득했습니다.`;
+
+        const starIcons = '★'.repeat(starCount) + '☆'.repeat(3 - starCount);
+        const maxTurnsText = `${maxTurns}턴 내 돌파`;
+        const gimmickText = (this.currentStageIndex % 2 === 0) ? '용암 회피' : '무퇴각 완승';
+
+        desc.innerHTML = `<span style="font-family: DungGeunMo, monospace; font-size: 1.15rem; color: #fbbf24;">${STAGE_PRESETS[this.currentStageIndex].name} 클리어!</span><br><br>` +
+                        `<span style="color: #e2e8f0; font-size: 0.9rem;">달성 평가: <strong style="color: #facc15; font-size: 1.1rem; text-shadow: 0 0 6px rgba(250,204,21,0.5);">${starIcons}</strong> (${starCount}/3성)</span><br>` +
+                        `<span style="color: #94a3b8; font-size: 0.78rem; text-align: left; display: inline-block; margin-top: 5px;">` +
+                        `• 스테이지 클리어: <span style="color: #34d399;">🌟 성공</span><br>` +
+                        `• ${maxTurnsText}: ${isTimeStar ? '<span style="color: #34d399;">🌟 성공</span>' : '<span style="color: #f87171;">❌ 실패</span>'} (소요: ${this.turnManager.getTurnNumber()}턴)<br>` +
+                        `• ${gimmickText}: ${isGimmickStar ? '<span style="color: #34d399;">🌟 성공</span>' : '<span style="color: #f87171;">❌ 실패</span>'}<br>` +
+                        `</span><br><br>` +
+                        `<span style="color: #60a5fa; font-weight: bold; font-size: 0.85rem;">보상으로 훈련 스피어 🌟 ${1 + starCount}개를 획득했습니다!</span>`;
         btn.innerText = '🛡️ 전술 훈련소로';
       } else if (result === 'COMPLETE') {
         title.innerText = 'GAME CLEAR!';
@@ -4013,6 +4176,50 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.showDialogue('SYSTEM', `전투가 종료되었습니다. 결과: ${result}`, 3500);
+  }
+
+  private showRuneSelectionModal(onComplete: () => void) {
+    const overlay = document.getElementById('rune-selection-overlay');
+    const container = document.getElementById('rune-cards-container');
+    if (!overlay || !container) {
+      onComplete();
+      return;
+    }
+
+    container.innerHTML = '';
+    overlay.classList.remove('hidden');
+
+    const runesList = [
+      { id: 'vamp', name: '🩸 흡혈의 문양', desc: '물리 공격 시 준 대미지의 20%를 아군의 HP로 즉시 흡수합니다.', icon: '🩸' },
+      { id: 'mp_accel', name: '⚡ 마나 가속', desc: '모든 아군 마법 스펠의 소모 MP가 1 감소합니다. (최소 1)', icon: '⚡' },
+      { id: 'iron_will', name: '🛡️ 불굴의 의지', desc: 'HP가 30% 이하일 때 받는 모든 피해가 40% 감소합니다.', icon: '🛡️' },
+      { id: 'wind_walk', name: '👟 바람의 걸음', desc: '아군 전체의 기본 이동 범위가 1칸 영구히 늘어납니다.', icon: '👟' },
+      { id: 'fire_touch', name: '🔥 화염 인챈트', desc: '물리 일반 공격 시 피격자에게 2턴간 화상 디버프를 부여합니다.', icon: '🔥' },
+      { id: 'toxic_breath', name: '🤢 독무의 숨결', desc: '마법 주문 시전 시 피격자에게 2턴간 중독 디버프를 부여합니다.', icon: '🤢' }
+    ];
+
+    // Shuffle and pick 3 cards
+    const shuffled = runesList.sort(() => 0.5 - Math.random());
+    const selectedRunes = shuffled.slice(0, 3);
+
+    selectedRunes.forEach(r => {
+      const card = document.createElement('div');
+      card.className = 'rune-card';
+      card.innerHTML = `
+        <div class="rune-icon">${r.icon}</div>
+        <div class="rune-title" style="font-weight: bold; margin-bottom: 5px;">${r.name}</div>
+        <div class="rune-desc" style="font-size: 0.74rem; color: #cbd5e1; line-height: 1.35; margin-top: 5px;">${r.desc}</div>
+      `;
+
+      card.addEventListener('click', () => {
+        this.activeRunes.push(r.id);
+        overlay.classList.add('hidden');
+        this.showDialogue('SYSTEM', `[${r.name}] 룬을 획득하여 아군 전체에 영구 적용됩니다!`, 1800);
+        onComplete();
+      });
+
+      container.appendChild(card);
+    });
   }
 
   private runAllEnemiesAI() {
@@ -5440,6 +5647,7 @@ export class GameScene extends Phaser.Scene {
   private resetPermanentGrowth() {
     this.trainingSpheres = 0;
     this.sharedInventory = [];
+    this.activeRunes = [];
     this.allyGrowthStats = {
       warrior: { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null, isPromoted: false },
       mage: { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null, isPromoted: false },
@@ -5447,6 +5655,7 @@ export class GameScene extends Phaser.Scene {
       cleric: { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null, isPromoted: false },
       rogue: { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null, isPromoted: false }
     };
+    document.getElementById('mode-selection-overlay')?.classList.remove('hidden');
   }
 
   private showDialogue(speaker: string, text: string, durationMs: number) {
