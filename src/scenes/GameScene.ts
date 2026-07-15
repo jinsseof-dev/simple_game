@@ -640,11 +640,11 @@ export class GameScene extends Phaser.Scene {
   private updateOriginPoints() {
     this.mapOriginX = this.cameras.main.width / 2;
     if (this.gridWidth >= 24) {
-      this.mapOriginY = this.cameras.main.height / 5.2;
+      this.mapOriginY = this.cameras.main.height / 3.8;
     } else if (this.gridWidth >= 18) {
-      this.mapOriginY = this.cameras.main.height / 4.2;
-    } else {
       this.mapOriginY = this.cameras.main.height / 3.4;
+    } else {
+      this.mapOriginY = this.cameras.main.height / 3.0;
     }
   }
 
@@ -1287,11 +1287,11 @@ export class GameScene extends Phaser.Scene {
     const targetWidth = Math.floor(stage.width * 1.5);
     let zoom = 1.0;
     if (targetWidth >= 24) {
-      zoom = 0.52;
+      zoom = 0.86;
     } else if (targetWidth >= 18) {
-      zoom = 0.62;
-    } else if (targetWidth >= 15) {
-      zoom = 0.72;
+      zoom = 0.94;
+    } else {
+      zoom = 1.0;
     }
     this.cameras.main.setZoom(zoom);
 
@@ -1714,86 +1714,46 @@ export class GameScene extends Phaser.Scene {
       
       directions.forEach(dir => {
         const isCurrent = char.direction === dir;
-        const topColor = isCurrent ? 0xff4d4d : 0x00f3ff;
-        const sideColor = isCurrent ? 0xaa0000 : 0x007ba0;
         const strokeColor = isCurrent ? 0xffffff : 0x00c8ff;
-        const strokeAlpha = isCurrent ? 0.95 : 0.45;
-        const alpha = isCurrent ? 1.0 : 0.65;
 
-        // 1. Draw Side Facet (Depth Shadow)
-        char.dirGraphics.fillStyle(sideColor, alpha);
+        const length = 44;
+        let targetX = 0;
+        let targetY = 0;
+        if (dir === 'NE') { targetX = length; targetY = -length * 0.5; }
+        else if (dir === 'SE') { targetX = length; targetY = length * 0.5; }
+        else if (dir === 'SW') { targetX = -length; targetY = length * 0.5; }
+        else if (dir === 'NW') { targetX = -length; targetY = -length * 0.5; }
+
+        // 1. Draw flat arrow stem line
+        char.dirGraphics.lineStyle(isCurrent ? 4.5 : 2.5, isCurrent ? 0xff4d4d : 0x00f3ff, isCurrent ? 1.0 : 0.45);
         char.dirGraphics.beginPath();
-        if (dir === 'NE') {
-          char.dirGraphics.moveTo(28, -20);
-          char.dirGraphics.lineTo(36, -34);
-          char.dirGraphics.lineTo(29, -16);
-          char.dirGraphics.lineTo(22, -18);
-        } else if (dir === 'SE') {
-          char.dirGraphics.moveTo(22, -12);
-          char.dirGraphics.lineTo(36, -10);
-          char.dirGraphics.lineTo(26, -6);
-          char.dirGraphics.lineTo(18, -8);
-        } else if (dir === 'SW') {
-          char.dirGraphics.moveTo(-22, -12);
-          char.dirGraphics.lineTo(-36, -10);
-          char.dirGraphics.lineTo(-26, -6);
-          char.dirGraphics.lineTo(-18, -8);
-        } else if (dir === 'NW') {
-          char.dirGraphics.moveTo(-28, -20);
-          char.dirGraphics.lineTo(-36, -34);
-          char.dirGraphics.lineTo(-29, -16);
-          char.dirGraphics.lineTo(-22, -18);
-        }
+        char.dirGraphics.moveTo(targetX * 0.2, targetY * 0.2);
+        char.dirGraphics.lineTo(targetX, targetY);
+        char.dirGraphics.strokePath();
+
+        // 2. Compute arrow head tip angles
+        const angle = Math.atan2(targetY, targetX);
+        const headLen = 14;
+        const leftX = targetX - headLen * Math.cos(angle - 0.45);
+        const leftY = targetY - headLen * Math.sin(angle - 0.45);
+        const rightX = targetX - headLen * Math.cos(angle + 0.45);
+        const rightY = targetY - headLen * Math.sin(angle + 0.45);
+
+        // 3. Fill flat arrow head triangle
+        char.dirGraphics.fillStyle(isCurrent ? 0xff4d4d : 0x00f3ff, isCurrent ? 1.0 : 0.45);
+        char.dirGraphics.beginPath();
+        char.dirGraphics.moveTo(targetX, targetY);
+        char.dirGraphics.lineTo(leftX, leftY);
+        char.dirGraphics.lineTo(rightX, rightY);
         char.dirGraphics.closePath();
         char.dirGraphics.fillPath();
 
-        // 2. Draw Top Facet (Glow Top Face)
-        char.dirGraphics.fillStyle(topColor, alpha);
+        // 4. Trace neon outline of arrow head
+        char.dirGraphics.lineStyle(1.5, strokeColor, isCurrent ? 1.0 : 0.45);
         char.dirGraphics.beginPath();
-        if (dir === 'NE') {
-          char.dirGraphics.moveTo(20, -28);
-          char.dirGraphics.lineTo(36, -34);
-          char.dirGraphics.lineTo(28, -20);
-        } else if (dir === 'SE') {
-          char.dirGraphics.moveTo(28, -20);
-          char.dirGraphics.lineTo(36, -10);
-          char.dirGraphics.lineTo(22, -12);
-        } else if (dir === 'SW') {
-          char.dirGraphics.moveTo(-28, -20);
-          char.dirGraphics.lineTo(-36, -10);
-          char.dirGraphics.lineTo(-22, -12);
-        } else if (dir === 'NW') {
-          char.dirGraphics.moveTo(-20, -28);
-          char.dirGraphics.lineTo(-36, -34);
-          char.dirGraphics.lineTo(-28, -20);
-        }
-        char.dirGraphics.closePath();
-        char.dirGraphics.fillPath();
-
-        // 3. Draw Neon Outer Outline
-        char.dirGraphics.lineStyle(1.8, strokeColor, strokeAlpha);
-        char.dirGraphics.beginPath();
-        if (dir === 'NE') {
-          char.dirGraphics.moveTo(20, -28);
-          char.dirGraphics.lineTo(36, -34);
-          char.dirGraphics.lineTo(29, -16);
-          char.dirGraphics.lineTo(22, -18);
-        } else if (dir === 'SE') {
-          char.dirGraphics.moveTo(28, -20);
-          char.dirGraphics.lineTo(36, -10);
-          char.dirGraphics.lineTo(26, -6);
-          char.dirGraphics.lineTo(18, -8);
-        } else if (dir === 'SW') {
-          char.dirGraphics.moveTo(-28, -20);
-          char.dirGraphics.lineTo(-36, -10);
-          char.dirGraphics.lineTo(-26, -6);
-          char.dirGraphics.lineTo(-18, -8);
-        } else if (dir === 'NW') {
-          char.dirGraphics.moveTo(-20, -28);
-          char.dirGraphics.lineTo(-36, -34);
-          char.dirGraphics.lineTo(-29, -16);
-          char.dirGraphics.lineTo(-22, -18);
-        }
+        char.dirGraphics.moveTo(targetX, targetY);
+        char.dirGraphics.lineTo(leftX, leftY);
+        char.dirGraphics.lineTo(rightX, rightY);
         char.dirGraphics.closePath();
         char.dirGraphics.strokePath();
       });
