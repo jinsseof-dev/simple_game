@@ -1295,6 +1295,8 @@ export class GameScene extends Phaser.Scene {
     // 1. Clean up existing objects
     this.characters.forEach(c => {
       if (c.gameObject) c.gameObject.destroy();
+      if (c.dirGraphics) c.dirGraphics.destroy();
+      if (c.hudBarGraphics) c.hudBarGraphics.destroy();
     });
     this.characters = [];
     this.selectedCharacter = null;
@@ -3776,6 +3778,9 @@ export class GameScene extends Phaser.Scene {
 
     const runStep = (index: number) => {
       if (index >= moveSteps.length) {
+        if (!char.isEnemy) {
+          this.tryPickupFieldItem(char);
+        }
         this.turnManager.setState(this.previousState);
         onComplete();
         return;
@@ -3804,9 +3809,6 @@ export class GameScene extends Phaser.Scene {
         onComplete: () => {
           char.x = step.x;
           char.y = step.y;
-          if (!char.isEnemy) {
-            this.tryPickupFieldItem(char);
-          }
           char.gameObject.setDepth(screenPos.y + 10);
           runStep(index + 1);
         }
@@ -3823,7 +3825,26 @@ export class GameScene extends Phaser.Scene {
     this.sharedInventory.push(matched.item);
     matched.gameObject.destroy();
     this.fieldItems.splice(idx, 1);
+    
     this.showDialogue(char.name, `[${matched.item.name}] 획득!`, 1200);
+
+    // Floating UI Text pop-up on character head
+    const popup = this.add.text(char.gameObject.x, char.gameObject.y - 110, `🎁 [${matched.item.name}] 획득!`, {
+      fontFamily: 'DungGeunMo, Pixelify Sans, monospace',
+      fontSize: '14px',
+      color: '#facc15',
+      stroke: '#000000',
+      strokeThickness: 3.5
+    }).setOrigin(0.5).setDepth(char.gameObject.depth + 105);
+
+    this.tweens.add({
+      targets: popup,
+      y: popup.y - 25,
+      alpha: 0,
+      duration: 1600,
+      ease: 'Cubic.easeOut',
+      onComplete: () => popup.destroy()
+    });
   }
 
   private executeAttack(attacker: Character, defender: Character, onComplete?: () => void) {
@@ -3943,10 +3964,10 @@ export class GameScene extends Phaser.Scene {
 
     // 1. Evaluate Back Attack bonus: attacker is positioned strictly behind defender's facing direction
     let isBackAttack = false;
-    if (defender.direction === 'NE' && attacker.x < defender.x) isBackAttack = true;
-    else if (defender.direction === 'SE' && attacker.y < defender.y) isBackAttack = true;
-    else if (defender.direction === 'SW' && attacker.x > defender.x) isBackAttack = true;
-    else if (defender.direction === 'NW' && attacker.y > defender.y) isBackAttack = true;
+    if (defender.direction === 'SE' && attacker.x < defender.x) isBackAttack = true;
+    else if (defender.direction === 'SW' && attacker.y < defender.y) isBackAttack = true;
+    else if (defender.direction === 'NW' && attacker.x > defender.x) isBackAttack = true;
+    else if (defender.direction === 'NE' && attacker.y > defender.y) isBackAttack = true;
 
     let damage = attacker.isEnemy ? Phaser.Math.Between(10, 16) : (Phaser.Math.Between(18, 26) + (attacker.bonusDmg || 0));
     if (attacker.isEnemy) {
