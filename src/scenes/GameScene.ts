@@ -639,10 +639,12 @@ export class GameScene extends Phaser.Scene {
 
   private updateOriginPoints() {
     this.mapOriginX = this.cameras.main.width / 2;
-    if (this.gridWidth >= 16) {
-      this.mapOriginY = this.cameras.main.height / 3.8;
+    if (this.gridWidth >= 24) {
+      this.mapOriginY = this.cameras.main.height / 5.2;
+    } else if (this.gridWidth >= 18) {
+      this.mapOriginY = this.cameras.main.height / 4.2;
     } else {
-      this.mapOriginY = this.cameras.main.height / 3;
+      this.mapOriginY = this.cameras.main.height / 3.4;
     }
   }
 
@@ -1282,13 +1284,14 @@ export class GameScene extends Phaser.Scene {
 
     // Reset camera scroll position and compute adaptive zoom
     this.cameras.main.setScroll(0, 0);
+    const targetWidth = Math.floor(stage.width * 1.5);
     let zoom = 1.0;
-    if (stage.width >= 16) {
-      zoom = 0.74;
-    } else if (stage.width >= 12) {
-      zoom = 0.86;
-    } else if (stage.width >= 10) {
-      zoom = 0.94;
+    if (targetWidth >= 24) {
+      zoom = 0.52;
+    } else if (targetWidth >= 18) {
+      zoom = 0.62;
+    } else if (targetWidth >= 15) {
+      zoom = 0.72;
     }
     this.cameras.main.setZoom(zoom);
 
@@ -1308,9 +1311,9 @@ export class GameScene extends Phaser.Scene {
     this.mapObjects = [];
     this.fieldItems = [];
 
-    // 2. Set grid configuration dynamically based on stage index
-    this.gridWidth = 10 + (this.currentStageIndex % 3) * 3;
-    this.gridHeight = this.gridWidth;
+    // 2. Set grid configuration dynamically based on stage index (1.5x enlargement)
+    this.gridWidth = Math.floor(stage.width * 1.5);
+    this.gridHeight = Math.floor(stage.height * 1.5);
     this.updateOriginPoints();
 
     // 3. Init procedural map layouts (Canyon cliffs, Bridges, Rocky forests)
@@ -1456,8 +1459,8 @@ export class GameScene extends Phaser.Scene {
         this.spawnedAllyKeys.push(preset.type);
       }
 
-      let spawnX = preset.x;
-      let spawnY = preset.y;
+      let spawnX = Math.round(preset.x * 1.5);
+      let spawnY = Math.round(preset.y * 1.5);
 
       const isValidSpawn = (x: number, y: number) => {
         if (x < 0 || x >= this.gridWidth || y < 0 || y >= this.gridHeight) return false;
