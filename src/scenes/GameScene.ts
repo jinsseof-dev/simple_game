@@ -37,6 +37,7 @@ interface Character {
   bonusDmg: number;
   isPromoted?: boolean;
   isInvincible?: boolean;
+  equippedSkinId?: string;
 }
 
 interface SpellConfig {
@@ -57,6 +58,38 @@ interface Item {
   dmgBonus: number;
   hpBonus: number;
 }
+
+export interface SkinConfig {
+  id: string;
+  name: string;
+  spriteKey: string;
+  avatar: string;
+  description: string;
+  accentColor: number;
+}
+
+export const SKIN_PRESETS: Record<string, SkinConfig[]> = {
+  warrior: [
+    { id: 'default', name: '기본 전사', spriteKey: 'char_warrior', avatar: '⚔️', description: '기본 강철 갑옷을 입은 훈련된 용사.', accentColor: 0x38bdf8 },
+    { id: 'gold', name: '황금 성기사', spriteKey: 'skin_warrior_gold', avatar: '👑', description: '황금빛 서광을 발하는 전설적인 성기사의 갑주.', accentColor: 0xfacc15 }
+  ],
+  mage: [
+    { id: 'default', name: '기본 법사', spriteKey: 'char_mage', avatar: '🔮', description: '현자의 탑 출신의 정통 마법사.', accentColor: 0x8b5cf6 },
+    { id: 'fire', name: '화염의 주술사', spriteKey: 'skin_mage_fire', avatar: '🔥', description: '꺼지지 않는 불꽃의 심장을 지닌 불의 원소술사.', accentColor: 0xef4444 }
+  ],
+  archer: [
+    { id: 'default', name: '기본 궁수', spriteKey: 'char_archer', avatar: '🏹', description: '백발백중의 실력을 자랑하는 순찰대 궁수.', accentColor: 0x10b981 },
+    { id: 'shadow', name: '어둠의 추적자', spriteKey: 'skin_archer_shadow', avatar: '🎯', description: '밤의 그림자 속에 숨어 적을 저격하는 암살 궁수.', accentColor: 0x475569 }
+  ],
+  cleric: [
+    { id: 'default', name: '기본 사제', spriteKey: 'char_mage', avatar: '💚', description: '새벽의 광명으로 동료를 수호하는 빛의 성직자.', accentColor: 0x34d399 },
+    { id: 'angel', name: '대천사의 화신', spriteKey: 'skin_cleric_angel', avatar: '👼', description: '신의 총애를 받아 등 뒤에 천사의 날개가 돋아난 성녀.', accentColor: 0xfef08a }
+  ],
+  rogue: [
+    { id: 'default', name: '기본 도적', spriteKey: 'char_warrior', avatar: '🗡️', description: '바람처럼 은밀하게 움직이는 길거리 자객.', accentColor: 0x4b5563 },
+    { id: 'neon', name: '네온 사이버', spriteKey: 'skin_rogue_neon', avatar: '👤', description: '미래 지향적인 네온 광섬유 슈트를 장착한 사이버 킬러.', accentColor: 0x00f3ff }
+  ]
+};
 
 const EQUIPMENT_DATABASE: Item[] = [
   // Warrior Weapons
@@ -193,12 +226,13 @@ export class GameScene extends Phaser.Scene {
     equippedWeapon: Item | null;
     equippedArmor: Item | null;
     isPromoted: boolean;
+    equippedSkinId: string;
   }> = {
-    warrior: { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null, isPromoted: false },
-    mage: { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null, isPromoted: false },
-    archer: { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null, isPromoted: false },
-    cleric: { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null, isPromoted: false },
-    rogue: { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null, isPromoted: false }
+    warrior: { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null, isPromoted: false, equippedSkinId: 'default' },
+    mage: { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null, isPromoted: false, equippedSkinId: 'default' },
+    archer: { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null, isPromoted: false, equippedSkinId: 'default' },
+    cleric: { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null, isPromoted: false, equippedSkinId: 'default' },
+    rogue: { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null, isPromoted: false, equippedSkinId: 'default' }
   };
 
   private sharedInventory: Item[] = [];
@@ -240,14 +274,37 @@ export class GameScene extends Phaser.Scene {
     this.load.image('char_archer', 'char_archer.png');
     this.load.image('char_goblin', 'char_goblin.png');
     this.load.image('char_goblin_boss', 'char_goblin_boss.png');
+
+    // Preload custom character skin sprites
+    this.load.image('skin_warrior_gold', 'skin_warrior_gold.png');
+    this.load.image('skin_mage_fire', 'skin_mage_fire.png');
+    this.load.image('skin_archer_shadow', 'skin_archer_shadow.png');
+    this.load.image('skin_cleric_angel', 'skin_cleric_angel.png');
+    this.load.image('skin_rogue_neon', 'skin_rogue_neon.png');
   }
 
   create() {
+    // Global error listener to dump JS runtime exceptions to in-game log panel
+    window.onerror = (message, source, lineno) => {
+      this.logDebug(`<span style="color: #f87171; font-weight: bold;">[ERR] ${message} (${source?.toString().split('/').pop()}:${lineno})</span>`);
+      return false;
+    };
+    window.addEventListener('unhandledrejection', (event) => {
+      this.logDebug(`<span style="color: #f87171; font-weight: bold;">[Promise ERR] ${event.reason}</span>`);
+    });
+
     this.sys.textures.get('char_warrior').setFilter(Phaser.Textures.FilterMode.NEAREST);
     this.sys.textures.get('char_mage').setFilter(Phaser.Textures.FilterMode.NEAREST);
     this.sys.textures.get('char_archer').setFilter(Phaser.Textures.FilterMode.NEAREST);
     this.sys.textures.get('char_goblin').setFilter(Phaser.Textures.FilterMode.NEAREST);
     this.sys.textures.get('char_goblin_boss').setFilter(Phaser.Textures.FilterMode.NEAREST);
+
+    // Apply nearest filter modes to skins
+    ['skin_warrior_gold', 'skin_mage_fire', 'skin_archer_shadow', 'skin_cleric_angel', 'skin_rogue_neon'].forEach(key => {
+      if (this.sys.textures.exists(key)) {
+        this.sys.textures.get(key).setFilter(Phaser.Textures.FilterMode.NEAREST);
+      }
+    });
 
     this.turnManager = new TurnManager();
     this.isGameOver = false;
@@ -287,11 +344,13 @@ export class GameScene extends Phaser.Scene {
     // Game Mode Selection Modal bindings
     const modeOverlay = document.getElementById('mode-selection-overlay');
     const btnClassic = document.getElementById('btn-mode-classic');
-    const btnRune = document.getElementById('btn-mode-rune');
+    const btnRune = document.getElementById('btn-mode-rune') as HTMLButtonElement | null;
     
     if (this.currentStageIndex > 0) {
       modeOverlay?.classList.add('hidden');
     }
+
+    this.updateModeSelectionUI();
 
     if (btnClassic && btnRune && modeOverlay) {
       btnClassic.addEventListener('click', () => {
@@ -300,6 +359,7 @@ export class GameScene extends Phaser.Scene {
         this.showDialogue('SYSTEM', '🏆 클래식 모드가 적용되었습니다.', 1500);
       });
       btnRune.addEventListener('click', () => {
+        if (localStorage.getItem('classic_mode_cleared') !== 'true') return;
         this.isRuneModeEnabled = true;
         modeOverlay.classList.add('hidden');
         this.showDialogue('SYSTEM', '🔮 로그라이트 룬 모드가 활성화되었습니다!', 1800);
@@ -535,13 +595,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateCharacterVisualMode(char: Character) {
-    // 2.5D sprite is permanently hidden
+    const showHead = this.showHeadAvatar;
     if (char.bodySprite) {
-      char.bodySprite.setVisible(false);
+      char.bodySprite.setVisible(!showHead);
     }
     
     // Toggle only the head emoji emblem and head text visibility
-    const showHead = this.showHeadAvatar;
     char.bodyEmblem.setVisible(showHead);
     char.bodyText.setVisible(showHead);
 
@@ -723,21 +782,8 @@ export class GameScene extends Phaser.Scene {
           this.lavaGrid[y][lavaCol2] = true;
         }
       }
-
-      // Add obstacles (Crates/Barrels)
-      for (let y = 1; y < this.gridHeight - 1; y++) {
-        for (let x = 1; x < this.gridWidth - 1; x++) {
-          const isNearAllySpawn = (x < 3 && y >= this.gridHeight - 3);
-          const isNearEnemySpawn = (x >= this.gridWidth - 3 && y < 3);
-          const isLava = this.lavaGrid[y][x];
-
-          if (!isNearAllySpawn && !isNearEnemySpawn && !isLava && Math.random() < 0.12) {
-            this.obstacleGrid[y][x] = true;
-          }
-        }
-      }
     } else if (theme === 'dungeon') {
-      // 3. Dungeon Boss Arena Theme: Highly organized symmetrical pillars & checkerboard lava pools
+      // 3. Dungeon Boss Arena Theme: Symmetrical pillars & checkerboard lava pools
       for (let y = 0; y < this.gridHeight; y++) {
         for (let x = 0; x < this.gridWidth; x++) {
           const isNearAllySpawn = (x < 3 && y >= this.gridHeight - 3);
@@ -758,18 +804,22 @@ export class GameScene extends Phaser.Scene {
           }
         }
       }
-    } else {
-      // 4. Grass Theme (Generic open field with scattered foliage)
-      for (let y = 1; y < this.gridHeight - 1; y++) {
-        for (let x = 1; x < this.gridWidth - 1; x++) {
-          const isNearAllySpawn = (x < 4 && y >= this.gridHeight - 4);
-          const isNearEnemySpawn = (x >= this.gridWidth - 4 && y < 4);
+    }
+
+    // Load preset obstacles from StageConfig (scaled by 1.5)
+    if (stage && stage.obstacles) {
+      stage.obstacles.forEach(obs => {
+        const ox = Math.round(obs.x * 1.5);
+        const oy = Math.round(obs.y * 1.5);
+        if (ox >= 0 && ox < this.gridWidth && oy >= 0 && oy < this.gridHeight) {
+          const isCliff = this.cliffGrid[oy] && this.cliffGrid[oy][ox] && !(this.bridgeGrid[oy] && this.bridgeGrid[oy][ox]);
+          if (isCliff) return;
+          if (this.bridgeGrid[oy] && this.bridgeGrid[oy][ox]) return;
+          if (this.lavaGrid[oy] && this.lavaGrid[oy][ox]) return;
           
-          if (!isNearAllySpawn && !isNearEnemySpawn && Math.random() < 0.14) {
-            this.obstacleGrid[y][x] = true;
-          }
+          this.obstacleGrid[oy][ox] = true;
         }
-      }
+      });
     }
   }
 
@@ -1328,6 +1378,7 @@ export class GameScene extends Phaser.Scene {
 
     // 6. Reset turn manager and UI
     this.turnManager.reset();
+    this.updateChallengesHUD();
     
     // Update Stage display HUD
     let chapterStr = "";
@@ -1357,6 +1408,10 @@ export class GameScene extends Phaser.Scene {
     if (firstPlayer) {
       this.selectCharacter(firstPlayer);
     }
+
+    if (this.isRuneModeEnabled) {
+      this.showDialogue('SYSTEM', '🔮 [하드] 룬 모드 활성화: 적들의 HP/공격력 +35%, 이동력 +1 적용!', 3000);
+    }
   }
 
   private createCharactersFromPreset(stage: StageConfig) {
@@ -1376,70 +1431,70 @@ export class GameScene extends Phaser.Scene {
       spells: SpellConfig[];
     }> = {
       warrior: {
-        avatar: '⚔️', maxHp: 100, maxMp: 5, maxAp: 3, moveRange: 4, minAttackRange: 1, maxAttackRange: 1, spriteKey: 'char_warrior', scale: 1.92, baseColor: 0x1e3a8a, topColor: 0x3b82f6, isEnemy: false,
+        avatar: '⚔️', maxHp: 100, maxMp: 4, maxAp: 5, moveRange: 4, minAttackRange: 1, maxAttackRange: 1, spriteKey: 'char_warrior', scale: 1.92, baseColor: 0x1e3a8a, topColor: 0x3b82f6, isEnemy: false,
         spells: [
           { name: '썬더 슬래시', cost: 2, rangeMin: 1, rangeMax: 2, type: 'Single', effectType: 'damage', debuffType: 'stun' },
           { name: '피닉스 다이브', cost: 3, rangeMin: 1, rangeMax: 3, type: 'AoE', effectType: 'damage', debuffType: 'burn' }
         ]
       },
       mage: {
-        avatar: '🔮', maxHp: 75, maxMp: 5, maxAp: 3, moveRange: 3, minAttackRange: 2, maxAttackRange: 4, spriteKey: 'char_mage', scale: 1.92, baseColor: 0x4c1d95, topColor: 0x8b5cf6, isEnemy: false,
+        avatar: '🔮', maxHp: 75, maxMp: 6, maxAp: 5, moveRange: 3, minAttackRange: 2, maxAttackRange: 4, spriteKey: 'char_mage', scale: 1.92, baseColor: 0x4c1d95, topColor: 0x8b5cf6, isEnemy: false,
         spells: [
           { name: '파이어 스톰', cost: 3, rangeMin: 2, rangeMax: 4, type: 'AoE', effectType: 'damage', debuffType: 'burn' },
           { name: '프로스트 레이', cost: 2, rangeMin: 2, rangeMax: 4, type: 'Line', effectType: 'damage', debuffType: 'stun' }
         ]
       },
       archer: {
-        avatar: '🏹', maxHp: 80, maxMp: 5, maxAp: 3, moveRange: 4, minAttackRange: 3, maxAttackRange: 5, spriteKey: 'char_archer', scale: 1.92, baseColor: 0x064e3b, topColor: 0x10b981, isEnemy: false,
+        avatar: '🏹', maxHp: 80, maxMp: 4, maxAp: 5, moveRange: 4, minAttackRange: 3, maxAttackRange: 5, spriteKey: 'char_archer', scale: 1.92, baseColor: 0x064e3b, topColor: 0x10b981, isEnemy: false,
         spells: [
           { name: '윈드 피어스', cost: 2, rangeMin: 3, rangeMax: 5, type: 'Line', effectType: 'damage' },
           { name: '샤이닝 에로우', cost: 3, rangeMin: 3, rangeMax: 5, type: 'Single', effectType: 'damage', debuffType: 'stun' }
         ]
       },
       cleric: {
-        avatar: '💚', maxHp: 85, maxMp: 5, maxAp: 3, moveRange: 3, minAttackRange: 1, maxAttackRange: 2, spriteKey: 'char_mage', scale: 1.92, baseColor: 0x065f46, topColor: 0x34d399, isEnemy: false,
+        avatar: '💚', maxHp: 85, maxMp: 5, maxAp: 5, moveRange: 3, minAttackRange: 1, maxAttackRange: 2, spriteKey: 'char_mage', scale: 1.92, baseColor: 0x065f46, topColor: 0x34d399, isEnemy: false,
         spells: [
           { name: '홀리 하트', cost: 2, rangeMin: 1, rangeMax: 3, type: 'Single', effectType: 'heal' },
           { name: '그레이스 에어', cost: 3, rangeMin: 1, rangeMax: 3, type: 'AoE', effectType: 'heal' }
         ]
       },
       rogue: {
-        avatar: '🗡️', maxHp: 90, maxMp: 5, maxAp: 3, moveRange: 5, minAttackRange: 1, maxAttackRange: 1, spriteKey: 'char_warrior', scale: 1.92, baseColor: 0x111827, topColor: 0x4b5563, isEnemy: false,
+        avatar: '🗡️', maxHp: 90, maxMp: 4, maxAp: 5, moveRange: 5, minAttackRange: 1, maxAttackRange: 1, spriteKey: 'char_warrior', scale: 1.92, baseColor: 0x111827, topColor: 0x4b5563, isEnemy: false,
         spells: [
           { name: '섀도우 스텝', cost: 2, rangeMin: 1, rangeMax: 2, type: 'Single', effectType: 'damage' },
           { name: '포이즌 대거', cost: 2, rangeMin: 1, rangeMax: 2, type: 'Single', effectType: 'damage', debuffType: 'poison' }
         ]
       },
       gob_warrior: {
-        avatar: '👹', maxHp: 60, maxMp: 5, maxAp: 3, moveRange: 3, minAttackRange: 1, maxAttackRange: 1, spriteKey: 'char_goblin', scale: 1.92, baseColor: 0x7f1d1d, topColor: 0xdc2626, isEnemy: true,
+        avatar: '👹', maxHp: 60, maxMp: 5, maxAp: 5, moveRange: 3, minAttackRange: 1, maxAttackRange: 1, spriteKey: 'char_goblin', scale: 1.92, baseColor: 0x7f1d1d, topColor: 0xdc2626, isEnemy: true,
         spells: [
           { name: '휠윈드 슬래시', cost: 2, rangeMin: 1, rangeMax: 1, type: 'AoE', effectType: 'damage' },
           { name: '격노의 도끼', cost: 2, rangeMin: 1, rangeMax: 1, type: 'Single', effectType: 'damage', debuffType: 'burn' }
         ]
       },
       gob_archer: {
-        avatar: '🏹', maxHp: 50, maxMp: 5, maxAp: 3, moveRange: 3, minAttackRange: 2, maxAttackRange: 4, spriteKey: 'char_goblin', scale: 1.92, baseColor: 0x7c2d12, topColor: 0xea580c, isEnemy: true,
+        avatar: '🏹', maxHp: 50, maxMp: 5, maxAp: 5, moveRange: 3, minAttackRange: 2, maxAttackRange: 4, spriteKey: 'char_goblin', scale: 1.92, baseColor: 0x7c2d12, topColor: 0xea580c, isEnemy: true,
         spells: [
           { name: '포이즌 에로우', cost: 2, rangeMin: 2, rangeMax: 4, type: 'Single', effectType: 'damage', debuffType: 'poison' },
           { name: '더블 샷', cost: 2, rangeMin: 2, rangeMax: 4, type: 'Single', effectType: 'damage' }
         ]
       },
-        gob_shaman: {
-        avatar: '🧙‍♂️', maxHp: 55, maxMp: 5, maxAp: 3, moveRange: 3, minAttackRange: 2, maxAttackRange: 3, spriteKey: 'char_goblin_boss', scale: 1.92, baseColor: 0x881337, topColor: 0xf43f5e, isEnemy: true,
+      gob_shaman: {
+        avatar: '🧙‍♂️', maxHp: 55, maxMp: 5, maxAp: 5, moveRange: 3, minAttackRange: 2, maxAttackRange: 3, spriteKey: 'char_goblin_boss', scale: 1.92, baseColor: 0x881337, topColor: 0xf43f5e, isEnemy: true,
         spells: [
           { name: '다크 스피어', cost: 3, rangeMin: 2, rangeMax: 3, type: 'AoE', effectType: 'damage', debuffType: 'stun' },
           { name: '커스 오브 파이어', cost: 2, rangeMin: 2, rangeMax: 3, type: 'Single', effectType: 'damage', debuffType: 'burn' }
         ]
       },
       gob_assassin: {
-        avatar: '👤', maxHp: 50, maxMp: 5, maxAp: 3, moveRange: 4, minAttackRange: 1, maxAttackRange: 1, spriteKey: 'char_goblin', scale: 1.92, baseColor: 0x451a03, topColor: 0xa16207, isEnemy: true,
+        avatar: '👤', maxHp: 50, maxMp: 5, maxAp: 5, moveRange: 4, minAttackRange: 1, maxAttackRange: 1, spriteKey: 'char_goblin', scale: 1.92, baseColor: 0x451a03, topColor: 0xa16207, isEnemy: true,
         spells: [
           { name: '기습', cost: 2, rangeMin: 1, rangeMax: 2, type: 'Single', effectType: 'damage' },
           { name: '독침', cost: 2, rangeMin: 1, rangeMax: 2, type: 'Single', effectType: 'damage', debuffType: 'poison' }
         ]
       },
       gob_defender: {
-        avatar: '🛡️', maxHp: 85, maxMp: 5, maxAp: 3, moveRange: 2, minAttackRange: 1, maxAttackRange: 1, spriteKey: 'char_goblin_boss', scale: 1.92, baseColor: 0x14532d, topColor: 0x22c55e, isEnemy: true,
+        avatar: '🛡️', maxHp: 85, maxMp: 5, maxAp: 5, moveRange: 2, minAttackRange: 1, maxAttackRange: 1, spriteKey: 'char_goblin_boss', scale: 1.92, baseColor: 0x14532d, topColor: 0x22c55e, isEnemy: true,
         spells: [
           { name: '그라운드 퀘이크', cost: 2, rangeMin: 1, rangeMax: 2, type: 'Single', effectType: 'damage', debuffType: 'stun' },
           { name: '고블린 블러드', cost: 2, rangeMin: 1, rangeMax: 1, type: 'Single', effectType: 'heal' }
@@ -1454,6 +1509,22 @@ export class GameScene extends Phaser.Scene {
     spawnPresets.forEach(preset => {
       const spec = UNIT_SPECS[preset.type];
       if (!spec) return;
+      const growth = !spec.isEnemy ? (this.allyGrowthStats[preset.type] || { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null, isPromoted: false, equippedSkinId: 'default' }) : { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null, isPromoted: false, equippedSkinId: 'default' };
+      const equippedSkinId = !spec.isEnemy ? (growth.equippedSkinId || 'default') : 'default';
+      
+      let activeSpriteKey = spec.spriteKey;
+      let activeAvatar = spec.avatar;
+      let activeAccentColor: number | null = null;
+      
+      if (!spec.isEnemy) {
+        const heroSkins = SKIN_PRESETS[preset.type] || [];
+        const currentSkin = heroSkins.find(s => s.id === equippedSkinId);
+        if (currentSkin) {
+          activeSpriteKey = currentSkin.spriteKey;
+          activeAvatar = currentSkin.avatar;
+          activeAccentColor = currentSkin.accentColor;
+        }
+      }
 
       if (!spec.isEnemy && !this.spawnedAllyKeys.includes(preset.type)) {
         this.spawnedAllyKeys.push(preset.type);
@@ -1472,30 +1543,24 @@ export class GameScene extends Phaser.Scene {
 
       if (!isValidSpawn(spawnX, spawnY)) {
         let found = false;
-        if (!spec.isEnemy) {
-          for (let y = this.gridHeight - 1; y >= this.gridHeight - 6; y--) {
-            for (let x = 0; x < 6; x++) {
-              if (isValidSpawn(x, y)) {
-                spawnX = x;
-                spawnY = y;
-                found = true;
-                break;
+        // Search in increasing radius rings around the intended spawn coordinates to find closest available space
+        for (let r = 1; r <= 5; r++) {
+          for (let dy = -r; dy <= r; dy++) {
+            for (let dx = -r; dx <= r; dx++) {
+              if (Math.max(Math.abs(dx), Math.abs(dy)) === r) {
+                const tx = spawnX + dx;
+                const ty = spawnY + dy;
+                if (isValidSpawn(tx, ty)) {
+                  spawnX = tx;
+                  spawnY = ty;
+                  found = true;
+                  break;
+                }
               }
             }
             if (found) break;
           }
-        } else {
-          for (let y = 0; y < 6; y++) {
-            for (let x = this.gridWidth - 1; x >= this.gridWidth - 6; x--) {
-              if (isValidSpawn(x, y)) {
-                spawnX = x;
-                spawnY = y;
-                found = true;
-                break;
-              }
-            }
-            if (found) break;
-          }
+          if (found) break;
         }
       }
 
@@ -1503,7 +1568,7 @@ export class GameScene extends Phaser.Scene {
       container.add(this.add.ellipse(0, 0, 48, 24, 0x000000, 0.4)); // shadow
 
       // Glow Ring
-      const ringColor = spec.isEnemy ? 0xf97316 : 0x38bdf8;
+      const ringColor = spec.isEnemy ? 0xf97316 : (activeAccentColor || 0x38bdf8);
       const glow = this.add.ellipse(0, 0, spec.isEnemy ? 68 : 72, spec.isEnemy ? 34 : 36, ringColor, 0.7).setVisible(false);
       this.tweens.add({
         targets: glow,
@@ -1517,7 +1582,7 @@ export class GameScene extends Phaser.Scene {
       container.add(glow);
 
     // Body Sprite
-      const sprite = this.add.image(0, -28, spec.spriteKey).setScale(spec.scale).setOrigin(0.5, 0.95).setVisible(false);
+      const sprite = this.add.image(0, -8, activeSpriteKey).setScale(spec.scale).setOrigin(0.5, 0.95).setVisible(false);
       container.add(sprite);
 
       // Pedestal Stand
@@ -1525,10 +1590,10 @@ export class GameScene extends Phaser.Scene {
       container.add(pillar);
 
       // Head Emblem / Emoji Text
-      const emblemStrokeColor = spec.isEnemy ? 0xf97316 : 0x38bdf8;
+      const emblemStrokeColor = spec.isEnemy ? 0xf97316 : (activeAccentColor || 0x38bdf8);
       const emblemBg = spec.isEnemy ? 0x450a0a : 0x1e1b4b;
       const emblem = this.add.circle(0, -24, 20, emblemBg).setStrokeStyle(2.5, emblemStrokeColor, 1);
-      const text = this.add.text(0, -24, spec.avatar, { fontSize: '20px', fontFamily: 'Segoe UI Emoji, Arial' }).setOrigin(0.5);
+      const text = this.add.text(0, -24, activeAvatar, { fontSize: '20px', fontFamily: 'Segoe UI Emoji, Arial' }).setOrigin(0.5);
       container.add(emblem);
       container.add(text);
 
@@ -1541,9 +1606,11 @@ export class GameScene extends Phaser.Scene {
         const chapterNum = Math.floor(this.currentStageIndex / 3) + 1;
         const stageNumWithinChapter = (this.currentStageIndex % 3) + 1;
         difficultyMultiplier = 1.0 + (chapterNum - 1) * 0.25 + (stageNumWithinChapter - 1) * 0.15;
+        if (this.isRuneModeEnabled) {
+          difficultyMultiplier *= 1.35; // +35% HP for enemies in Rune Mode
+        }
       }
 
-      const growth = !spec.isEnemy ? (this.allyGrowthStats[preset.type] || { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null, isPromoted: false }) : { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null, isPromoted: false };
       const eqDmg = (growth.equippedWeapon ? growth.equippedWeapon.dmgBonus : 0);
       const eqHp = (growth.equippedArmor ? growth.equippedArmor.hpBonus : 0);
 
@@ -1552,6 +1619,9 @@ export class GameScene extends Phaser.Scene {
       let finalMoveRange = spec.moveRange + growth.bonusMove;
       if (!spec.isEnemy && this.activeRunes.includes('wind_walk')) {
         finalMoveRange += 1;
+      }
+      if (spec.isEnemy && this.isRuneModeEnabled) {
+        finalMoveRange += 1; // +1 Move Range for enemies in Rune Mode!
       }
       let finalMaxAttackRange = spec.maxAttackRange;
       let finalBonusDmg = growth.bonusDmg + eqDmg;
@@ -1632,7 +1702,8 @@ export class GameScene extends Phaser.Scene {
         burnTurns: 0,
         stunTurns: 0,
         poisonTurns: 0,
-        bonusDmg: growth.bonusDmg + eqDmg
+        bonusDmg: growth.bonusDmg + eqDmg,
+        equippedSkinId: equippedSkinId
       };
 
       if (char.isEnemy && char.name.includes('[BOSS]')) {
@@ -1672,21 +1743,48 @@ export class GameScene extends Phaser.Scene {
       return true;
     };
 
+    // Deterministic target locations for the 2 chests (35% and 65% across the diagonal)
+    const targets = [
+      { x: Math.floor(this.gridWidth * 0.35), y: Math.floor(this.gridHeight * 0.35) },
+      { x: Math.floor(this.gridWidth * 0.65), y: Math.floor(this.gridHeight * 0.65) }
+    ];
+
     for (let i = 0; i < 2; i++) {
-      let x = 0;
-      let y = 0;
+      const target = targets[i];
+      let x = target.x;
+      let y = target.y;
       let found = false;
-      for (let attempt = 0; attempt < 100; attempt++) {
-        x = Phaser.Math.Between(0, this.gridWidth - 1);
-        y = Phaser.Math.Between(0, this.gridHeight - 1);
-        if (isValidTile(x, y)) {
-          found = true;
-          break;
+
+      if (isValidTile(x, y)) {
+        found = true;
+      } else {
+        // Search outward in rings around target if blocked
+        for (let r = 1; r <= 5; r++) {
+          for (let dy = -r; dy <= r; dy++) {
+            for (let dx = -r; dx <= r; dx++) {
+              if (Math.max(Math.abs(dx), Math.abs(dy)) === r) {
+                const tx = x + dx;
+                const ty = y + dy;
+                if (isValidTile(tx, ty)) {
+                  x = tx;
+                  y = ty;
+                  found = true;
+                  break;
+                }
+              }
+            }
+            if (found) break;
+          }
+          if (found) break;
         }
       }
+
       if (!found) continue;
 
-      const item = Phaser.Utils.Array.GetRandom(EQUIPMENT_DATABASE);
+      // Deterministic item selection based on stage and chest index
+      const itemIndex = (this.currentStageIndex * 2 + i) % EQUIPMENT_DATABASE.length;
+      const item = EQUIPMENT_DATABASE[itemIndex];
+
       const { x: sx, y: sy } = this.gridToScreen(x, y);
       const icon = this.add.text(sx, sy - 10, '🎁', { fontSize: '28px' }).setOrigin(0.5);
       icon.setDepth(sy);
@@ -1797,15 +1895,17 @@ export class GameScene extends Phaser.Scene {
     const color = char.isEnemy ? 0xf97316 : 0xfacc15; // Orange for enemy, Gold for ally
     
     // Draw an inverted triangle relative to container origin (0,0 is at base ellipse shadow)
-    // Height of body is roughly -56, so we place indicator at y = -75
-    this.selectionIndicator = this.add.triangle(0, -75, 0, 0, 16, 0, 8, 12, color, 1);
+    // Height of body is roughly -56, so we place indicator at y = -75 (or -145 for sprite mode)
+    const indicatorY = this.showHeadAvatar ? -75 : -145;
+    const indicatorTargetY = indicatorY - 12;
+    this.selectionIndicator = this.add.triangle(0, indicatorY, 0, 0, 16, 0, 8, 12, color, 1);
     this.selectionIndicator.setStrokeStyle(2, 0xffffff, 0.9);
     char.gameObject.add(this.selectionIndicator);
 
     // Bouncing animation on floating indicator
     this.tweens.add({
       targets: this.selectionIndicator,
-      y: -87,
+      y: indicatorTargetY,
       duration: 500,
       yoyo: true,
       repeat: -1,
@@ -2088,7 +2188,7 @@ export class GameScene extends Phaser.Scene {
     const btnEnd = document.getElementById('btn-end-turn') as HTMLButtonElement;
 
     if (btnMove && btnTurn && btnAttack && btnSpell1 && btnSpell2 && btnSpell3 && btnWait && btnEnd) {
-      if (isAnimating || this.isGameOver || !this.selectedCharacter || this.selectedCharacter.isEnemy) {
+      if (!isPlayerTurn || isAnimating || this.isGameOver || !this.selectedCharacter || this.selectedCharacter.isEnemy) {
         btnMove.disabled = true;
         btnTurn.disabled = true;
         btnAttack.disabled = true;
@@ -2096,7 +2196,7 @@ export class GameScene extends Phaser.Scene {
         btnSpell2.disabled = true;
         btnSpell3.disabled = true;
         btnWait.disabled = true;
-        btnEnd.disabled = this.isGameOver || isAnimating; 
+        btnEnd.disabled = this.isGameOver || isAnimating || !isPlayerTurn; 
       } else if (isPlayerTurn) {
         const char = this.selectedCharacter;
         const spell1 = char.spells[0];
@@ -2164,11 +2264,13 @@ export class GameScene extends Phaser.Scene {
     let lastRealState: TurnState = 'ENEMY_TURN';
 
     this.turnManager.onStateChange((state, turnNumber) => {
+      this.logDebug(`[Turn] ${state} 시작 (턴: ${turnNumber})`);
       const turnLabel = document.getElementById('turn-label');
       const turnCounter = document.getElementById('turn-counter');
 
       if (turnLabel && turnCounter) {
         turnCounter.innerText = `TURN ${turnNumber}`;
+        this.updateChallengesHUD();
 
         if (state === 'PLAYER_TURN') {
           turnLabel.innerText = 'PLAYER TURN';
@@ -2183,7 +2285,7 @@ export class GameScene extends Phaser.Scene {
 
               this.characters.forEach(c => {
                 if (!c.isEnemy && c.hp > 0) {
-                  c.ap = Math.min(c.ap + 1, c.maxAp);
+                  c.ap = Math.min(c.ap + 2, c.maxAp);
                   if (turnNumber > 1) {
                     c.mp = Math.min(c.mp + 1, c.maxMp);
                   }
@@ -2216,10 +2318,13 @@ export class GameScene extends Phaser.Scene {
               this.selectionIndicator.destroy();
               this.selectionIndicator = null;
             }
+            this.isDirectionSelectMode = false;
             this.characters.forEach(c => {
               if (c.glowRing) c.glowRing.setVisible(false);
+              this.updateDirectionVisual(c);
             });
             this.selectedCharacter = null;
+            this.updateActionButtonStates();
 
             // Clear player turn timer
             this.clearTurnTimer();
@@ -2231,7 +2336,7 @@ export class GameScene extends Phaser.Scene {
 
               this.characters.forEach(c => {
                 if (c.isEnemy && c.hp > 0) {
-                  c.ap = Math.min(c.ap + 1, c.maxAp);
+                  c.ap = Math.min(c.ap + 2, c.maxAp);
                   if (turnNumber > 1) {
                     c.mp = Math.min(c.mp + 1, c.maxMp);
                   }
@@ -2257,6 +2362,7 @@ export class GameScene extends Phaser.Scene {
 
   private processStatusEffectsForFaction(isEnemyFaction: boolean) {
     if (this.isGameOver) return;
+    this.logDebug(`[Status] ${isEnemyFaction ? '적군' : '아군'} 팩션 상태이상 처리 시작`);
 
     this.characters.forEach(c => {
       if (c.hp > 0 && c.isEnemy === isEnemyFaction) {
@@ -2389,6 +2495,7 @@ export class GameScene extends Phaser.Scene {
           c.burnTurns = Math.max(c.burnTurns, 3); // Inflict Burn for 3 turns!
           if (!c.isEnemy) {
             this.stageLavaDamaged = true;
+            this.updateChallengesHUD();
           }
           
           this.drawPedestal(c);
@@ -3322,6 +3429,17 @@ export class GameScene extends Phaser.Scene {
     const spell = attacker.spells[spellIndex];
     if (!spell) return;
 
+    // Ultimate screen shake and flash animations
+    if (spell.name === '종말의 유성') {
+      this.cameras.main.shake(350, 0.014);
+      this.cameras.main.flash(200, 0xff7722); // Fire Orange Flash
+    } else if (spell.name === '폭풍의 벼락 화살') {
+      this.cameras.main.shake(300, 0.010);
+      this.cameras.main.flash(150, 0xffffff); // White Flash
+    } else if (spell.effectType === 'heal' || spell.name === '구원의 성가') {
+      this.cameras.main.flash(180, 0x10b981, 0.35); // Holy Green Flash
+    }
+
     const splashTiles: Point[] = [];
     const hx = targetTile.x;
     const hy = targetTile.y;
@@ -3590,7 +3708,10 @@ export class GameScene extends Phaser.Scene {
         return;
       }
 
-      const baseDamage = attacker.isEnemy ? 25 : (36 + (attacker.bonusDmg || 0));
+      let baseDamage = attacker.isEnemy ? 25 : (36 + (attacker.bonusDmg || 0));
+      if (attacker.isEnemy && this.isRuneModeEnabled) {
+        baseDamage = Math.floor(baseDamage * 1.35); // +35% enemy spell damage in Rune Mode
+      }
       let finalDamage = Math.floor(baseDamage * (0.9 + Math.random() * 0.2));
 
       // iron_will: 40% dmg reduction for ally under 30% HP
@@ -3811,6 +3932,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   private executeAttack(attacker: Character, defender: Character, onComplete?: () => void) {
+    if (this.isGameOver || defender.hp <= 0) {
+      if (onComplete) onComplete();
+      return;
+    }
+
     this.previousState = this.turnManager.getState();
     this.turnManager.setState('ANIMATING');
 
@@ -3880,7 +4006,11 @@ export class GameScene extends Phaser.Scene {
     const startPos = this.gridToScreen(attacker.x, attacker.y);
     const targetPos = this.gridToScreen(defender.x, defender.y);
 
-    if (this.isGameOver || defender.hp <= 0) return;
+    if (this.isGameOver || defender.hp <= 0) {
+      this.turnManager.setState(this.previousState);
+      if (onComplete) onComplete();
+      return;
+    }
 
     // Spawn Magic orb/bullet Projectile based on faction color
     const projColor = attacker.isEnemy ? 0xf97316 : 0xd946ef;
@@ -3925,6 +4055,27 @@ export class GameScene extends Phaser.Scene {
   private handleHit(attacker: Character, defender: Character) {
     this.cameras.main.shake(100, 0.003);
 
+    if (defender.bodySprite) {
+      const originalSpriteX = defender.bodySprite.x;
+      this.tweens.add({
+        targets: defender.bodySprite,
+        x: originalSpriteX + 6,
+        duration: 45,
+        yoyo: true,
+        repeat: 3,
+        ease: 'Bounce.easeInOut',
+        onComplete: () => {
+          if (defender.bodySprite) defender.bodySprite.x = originalSpriteX;
+        }
+      });
+
+      // Flash tint red/white
+      defender.bodySprite.setTint(0xff5555);
+      this.time.delayedCall(180, () => {
+        if (defender.bodySprite) defender.bodySprite.clearTint();
+      });
+    }
+
     // 1. Evaluate Back Attack bonus: attacker is positioned strictly behind defender's facing direction
     let isBackAttack = false;
     if (defender.direction === 'SE' && attacker.x < defender.x) isBackAttack = true;
@@ -3936,15 +4087,40 @@ export class GameScene extends Phaser.Scene {
     if (attacker.isEnemy) {
       const chapterNum = Math.floor(this.currentStageIndex / 3) + 1;
       const stageNumWithinChapter = (this.currentStageIndex % 3) + 1;
-      const difficultyMultiplier = 1.0 + (chapterNum - 1) * 0.25 + (stageNumWithinChapter - 1) * 0.15;
+      let difficultyMultiplier = 1.0 + (chapterNum - 1) * 0.25 + (stageNumWithinChapter - 1) * 0.15;
+      if (this.isRuneModeEnabled) {
+        difficultyMultiplier *= 1.35; // +35% enemy damage in Rune Mode
+      }
       damage = Math.floor(damage * difficultyMultiplier);
     }
     if (isBackAttack) {
       damage = Math.floor(damage * 1.5);
+      this.cameras.main.shake(180, 0.007);
     }
 
     if (defender.isEnemy && defender.name.includes('[BOSS]') && defender.hp / defender.maxHp <= 0.5) {
       damage = Math.floor(damage * 0.7);
+    }
+
+    const isDefender = defender.isEnemy && (defender.name.includes("방패") || defender.name.includes("철벽") || defender.name.includes("defender"));
+    if (isDefender && !isBackAttack) {
+      damage = Math.floor(damage * 0.7);
+      
+      const blockText = this.add.text(defender.gameObject.x, defender.gameObject.y - 110, '🛡️ 방패 방어! (-30%)', {
+        fontFamily: 'DungGeunMo, Pixelify Sans, monospace',
+        fontSize: '12px',
+        color: '#38bdf8',
+        stroke: '#000000',
+        strokeThickness: 3.5
+      }).setOrigin(0.5).setDepth(defender.gameObject.depth + 102);
+
+      this.tweens.add({
+        targets: blockText,
+        y: blockText.y - 20,
+        alpha: 0,
+        duration: 1000,
+        onComplete: () => blockText.destroy()
+      });
     }
 
     // iron_will: 40% dmg reduction for ally under 30% HP
@@ -4076,6 +4252,7 @@ export class GameScene extends Phaser.Scene {
   private handleDeath(char: Character) {
     if (!char.isEnemy) {
       this.stageRetreatedCount++;
+      this.updateChallengesHUD();
     }
     this.tweens.add({
       targets: char.gameObject,
@@ -4157,6 +4334,11 @@ export class GameScene extends Phaser.Scene {
         title.style.textShadow = '0 0 20px rgba(250, 204, 21, 0.7)';
         desc.innerText = '축하합니다! 고블린 주술사의 요새를 완파하고\n모든 모험을 성공적으로 마쳤습니다!';
         btn.innerText = '🔄 처음부터 다시하기';
+        
+        // Unlock Roguelite Rune Mode if cleared in Classic Mode
+        if (!this.isRuneModeEnabled) {
+          localStorage.setItem('classic_mode_cleared', 'true');
+        }
       } else if (result === 'DEFEAT') {
         title.innerText = 'DEFEAT';
         title.style.color = '#ef4444';
@@ -4257,7 +4439,7 @@ export class GameScene extends Phaser.Scene {
     const spec = {
       isEnemy: true,
       maxHp: 90,
-      maxAp: 3,
+      maxAp: 5,
       maxMp: 0,
       moveRange: 4,
       minAttackRange: 1,
@@ -4274,7 +4456,7 @@ export class GameScene extends Phaser.Scene {
     const glow = this.add.ellipse(0, 0, 68, 34, 0xf97316, 0.7).setVisible(false);
     container.add(glow);
 
-    const sprite = this.add.image(0, -28, 'goblin').setScale(1.0).setOrigin(0.5, 0.95).setVisible(false);
+    const sprite = this.add.image(0, -8, 'goblin').setScale(1.0).setOrigin(0.5, 0.95).setVisible(false);
     container.add(sprite);
 
     const pillar = this.add.graphics();
@@ -4362,10 +4544,18 @@ export class GameScene extends Phaser.Scene {
   }
 
   private runSingleEnemyAI(enemy: Character, onComplete: () => void) {
+    this.logDebug(`[AI] ${enemy.name} 행동 개시 (AP: ${enemy.ap}, MP: ${enemy.mp})`);
+    if (enemy.ap <= 0) {
+      this.logDebug(`[AI] ${enemy.name}의 AP 부족으로 행동 종료.`);
+      onComplete();
+      return;
+    }
+
     this.showDialogue(enemy.name, '행동을 개시한다.', 1000);
 
     this.time.delayedCall(1100, () => {
       if (this.isGameOver || enemy.hp <= 0) {
+        this.logDebug(`[AI] ${enemy.name} 사망 또는 게임 오버로 중단.`);
         onComplete();
         return;
       }
@@ -4379,13 +4569,44 @@ export class GameScene extends Phaser.Scene {
 
       let closestPlayer = livingPlayers[0];
       let minDist = 9999;
-      livingPlayers.forEach(p => {
-        const d = Math.abs(enemy.x - p.x) + Math.abs(enemy.y - p.y);
-        if (d < minDist) {
-          minDist = d;
-          closestPlayer = p;
-        }
-      });
+      
+      const isAssassin = enemy.name.includes("자객") || enemy.name.includes("기습자") || enemy.name.includes("잠입수") || enemy.name.includes("assassin") || enemy.skinType === 'rogue';
+      
+      if (isAssassin) {
+        // Assassins prioritize squishy classes: mage, cleric, archer, rogue, warrior
+        const classPriority: Record<string, number> = {
+          mage: 5,
+          cleric: 4,
+          archer: 3,
+          rogue: 2,
+          warrior: 1
+        };
+        
+        let bestScore = -1;
+        livingPlayers.forEach(p => {
+          const d = Math.abs(enemy.x - p.x) + Math.abs(enemy.y - p.y);
+          const classKey = p.skinType || 'warrior';
+          const pScore = classPriority[classKey] || 1;
+          
+          // Score formula: high class priority, but penalize for distance to balance proximity
+          const score = pScore * 10 - d * 0.5;
+          if (score > bestScore) {
+            bestScore = score;
+            closestPlayer = p;
+            minDist = d;
+          }
+        });
+      } else {
+        // Regular enemies target the closest player
+        livingPlayers.forEach(p => {
+          const d = Math.abs(enemy.x - p.x) + Math.abs(enemy.y - p.y);
+          if (d < minDist) {
+            minDist = d;
+            closestPlayer = p;
+          }
+        });
+      }
+      this.logDebug(`[AI] ${enemy.name}의 타겟: ${closestPlayer.name} (거리: ${minDist}칸)`);
 
       // Define sequential AI behavior steps
       const attemptBossSpecialSpell = (afterBossCallback: () => void) => {
@@ -4395,9 +4616,11 @@ export class GameScene extends Phaser.Scene {
         }
 
         const distToPlayer = Math.abs(enemy.x - closestPlayer.x) + Math.abs(enemy.y - closestPlayer.y);
+        this.logDebug(`[AI] [BOSS] 특수 기믹 체크 - 거리: ${distToPlayer}칸`);
 
         // Skill 1: Chieftain's Wrath (Earthquake Smash) - Cost: 3 AP, 3 MP. Target in 3-tile range.
         if (enemy.ap >= 3 && enemy.mp >= 3 && distToPlayer <= 3) {
+          this.logDebug(`[AI] [BOSS] 군주의 진노 시전!`);
           enemy.ap -= 3;
           enemy.mp -= 3;
           enemy.hasAttackedThisTurn = true;
@@ -4544,17 +4767,37 @@ export class GameScene extends Phaser.Scene {
           afterSpellCallback();
           return;
         }
-        const chosenSelfHealIdx = enemy.spells.findIndex(s => s.effectType === 'heal');
-        if (chosenSelfHealIdx !== -1) {
-          const healSpell = enemy.spells[chosenSelfHealIdx];
+        this.logDebug(`[AI] ${enemy.name} 주문(스킬) 사용 조건 검사`);
+        const chosenHealIdx = enemy.spells.findIndex(s => s.effectType === 'heal');
+        if (chosenHealIdx !== -1) {
+          const healSpell = enemy.spells[chosenHealIdx];
           const canHeal = enemy.mp >= healSpell.cost && enemy.ap >= healSpell.cost && !enemy.hasAttackedThisTurn;
-          const hpRatio = enemy.hp / enemy.maxHp;
-          if (canHeal && hpRatio <= 0.6) {
-            this.executeSpell(enemy, { x: enemy.x, y: enemy.y }, chosenSelfHealIdx);
-            this.time.delayedCall(1200 * this.animationSpeedMultiplier, () => {
-              afterSpellCallback();
-            });
-            return;
+          if (canHeal) {
+            // Find most damaged enemy ally within range (including self)
+            const enemyAllies = this.characters.filter(c => c.isEnemy && c.hp > 0);
+            let targetAlly: Character | null = null;
+            let lowestHpRatio = 1.0;
+
+            for (const e of enemyAllies) {
+              const distToAlly = Math.abs(enemy.x - e.x) + Math.abs(enemy.y - e.y);
+              const rangeMax = healSpell.rangeMax || 3;
+              if (distToAlly <= rangeMax) {
+                const hpRatio = e.hp / e.maxHp;
+                if (hpRatio < lowestHpRatio) {
+                  lowestHpRatio = hpRatio;
+                  targetAlly = e;
+                }
+              }
+            }
+
+            if (targetAlly && lowestHpRatio <= 0.75) {
+              this.logDebug(`[AI] 아군 치유 주문 시전 -> 대상: ${targetAlly.name} (체력: ${(lowestHpRatio * 100).toFixed(1)}%)`);
+              this.executeSpell(enemy, { x: (targetAlly as Character).x, y: (targetAlly as Character).y }, chosenHealIdx);
+              this.time.delayedCall(1200 * this.animationSpeedMultiplier, () => {
+                afterSpellCallback();
+              });
+              return;
+            }
           }
         }
 
@@ -4573,6 +4816,7 @@ export class GameScene extends Phaser.Scene {
         }
 
         if (chosenSpellIndex !== -1 && enemy.ap >= enemy.spells[chosenSpellIndex].cost && !enemy.hasAttackedThisTurn) {
+          this.logDebug(`[AI] 공격 스킬 시전 -> 스킬명: ${enemy.spells[chosenSpellIndex].name} 대상: ${closestPlayer.name}`);
           this.executeSpell(enemy, { x: closestPlayer.x, y: closestPlayer.y }, chosenSpellIndex);
           this.time.delayedCall(1200 * this.animationSpeedMultiplier, () => {
             afterSpellCallback();
@@ -4590,7 +4834,9 @@ export class GameScene extends Phaser.Scene {
 
         // Apply straight line of sight coordinate attacks
         const canAttack = this.isCoordAttackable(enemy, closestPlayer.x, closestPlayer.y);
+        this.logDebug(`[AI] 일반 물리공격 가능여부 체크: ${canAttack}`);
         if (canAttack && enemy.ap > 0 && !enemy.hasAttackedThisTurn) {
+          this.logDebug(`[AI] 일반 물리공격 수행 -> 대상: ${closestPlayer.name}`);
           this.executeAttack(enemy, closestPlayer, () => {
             this.time.delayedCall(600, () => {
               afterAttackCallback();
@@ -4607,16 +4853,19 @@ export class GameScene extends Phaser.Scene {
           return;
         }
 
+        this.logDebug(`[AI] ${enemy.name} 이동 가능성 검사`);
         // Already in straight line attack range or spell range, skip movement to conserve position
         const canAttackNow = this.isCoordAttackable(enemy, closestPlayer.x, closestPlayer.y);
         const canSpellNow = enemy.spells.some((s, idx) => 
           enemy.mp >= s.cost && this.isCoordSpellRange(enemy, closestPlayer.x, closestPlayer.y, idx)
         );
         if (canAttackNow || canSpellNow) {
+          this.logDebug(`[AI] 이미 사거리 내에 존재하여 이동하지 않음.`);
           afterMoveCallback();
           return;
         }
 
+        this.logDebug(`[AI] A* 경로 탐색 시작 -> 목적지: ${closestPlayer.name} (${closestPlayer.x}, ${closestPlayer.y})`);
         const dynObstacles = this.getDynamicObstacleGrid(enemy, closestPlayer);
         const path = findPath(
           { x: enemy.x, y: enemy.y },
@@ -4626,6 +4875,7 @@ export class GameScene extends Phaser.Scene {
           dynObstacles
         );
 
+        this.logDebug(`[AI] 경로 탐색 결과 노드 수: ${path.length}`);
         if (path.length > 2) {
           let walkTargetIndex = path.length - 1;
           for (let i = 0; i < path.length; i++) {
@@ -4641,6 +4891,7 @@ export class GameScene extends Phaser.Scene {
           }
 
           const maxMoveIndex = Math.min(enemy.moveRange, walkTargetIndex);
+          this.logDebug(`[AI] 이동 가능 최대 인덱스: ${maxMoveIndex} (MoveRange: ${enemy.moveRange})`);
           if (maxMoveIndex > 0) {
             const actualPath = path.slice(0, maxMoveIndex + 1);
             const destination = actualPath[actualPath.length - 1];
@@ -4651,6 +4902,7 @@ export class GameScene extends Phaser.Scene {
             );
 
             if (!isDestOccupied) {
+              this.logDebug(`[AI] 이동 애니메이션 실행 -> 목적지: (${destination.x}, ${destination.y})`);
               this.moveCharacterAlongPath(enemy, actualPath, () => {
                 enemy.hasMovedThisTurn = true;
                 this.time.delayedCall(400, () => {
@@ -4658,12 +4910,15 @@ export class GameScene extends Phaser.Scene {
                 });
               });
             } else {
+              this.logDebug(`[AI] 목적지 타일 (${destination.x}, ${destination.y})이 점유됨 -> 이동 취소`);
               afterMoveCallback();
             }
           } else {
+            this.logDebug(`[AI] 유효한 이동 사거리 인덱스 없음 (maxMoveIndex <= 0)`);
             afterMoveCallback();
           }
         } else {
+          this.logDebug(`[AI] 경로 찾기 실패 또는 경로가 너무 짧음`);
           afterMoveCallback();
         }
       };
@@ -5307,33 +5562,50 @@ export class GameScene extends Phaser.Scene {
     // 1. Reset Tab display state to default (Training Tab active)
     const tabTrainBtn = document.getElementById('tab-btn-train');
     const tabEquipBtn = document.getElementById('tab-btn-equip');
+    const tabSkinBtn = document.getElementById('tab-btn-skin');
     const tabTrainView = document.getElementById('academy-tab-train');
     const tabEquipView = document.getElementById('academy-tab-equip');
+    const tabSkinView = document.getElementById('academy-tab-skin');
 
-    if (tabTrainBtn && tabEquipBtn && tabTrainView && tabEquipView) {
+    if (tabTrainBtn && tabEquipBtn && tabSkinBtn && tabTrainView && tabEquipView && tabSkinView) {
       tabTrainBtn.classList.add('active');
       tabEquipBtn.classList.remove('active');
+      tabSkinBtn.classList.remove('active');
       tabTrainView.classList.remove('hidden');
       tabEquipView.classList.add('hidden');
+      tabSkinView.classList.add('hidden');
     }
 
     this.updateAcademyUI();
 
     // 2. Bind Tab Switch Buttons
-    if (tabTrainBtn && tabEquipBtn && tabTrainView && tabEquipView) {
+    if (tabTrainBtn && tabEquipBtn && tabSkinBtn && tabTrainView && tabEquipView && tabSkinView) {
       tabTrainBtn.onclick = () => {
         tabTrainBtn.classList.add('active');
         tabEquipBtn.classList.remove('active');
+        tabSkinBtn.classList.remove('active');
         tabTrainView.classList.remove('hidden');
         tabEquipView.classList.add('hidden');
+        tabSkinView.classList.add('hidden');
         this.updateAcademyUI();
       };
       tabEquipBtn.onclick = () => {
         tabTrainBtn.classList.remove('active');
         tabEquipBtn.classList.add('active');
+        tabSkinBtn.classList.remove('active');
         tabTrainView.classList.add('hidden');
         tabEquipView.classList.remove('hidden');
+        tabSkinView.classList.add('hidden');
         this.updateAcademyEquipTab();
+      };
+      tabSkinBtn.onclick = () => {
+        tabTrainBtn.classList.remove('active');
+        tabEquipBtn.classList.remove('active');
+        tabSkinBtn.classList.add('active');
+        tabTrainView.classList.add('hidden');
+        tabEquipView.classList.add('hidden');
+        tabSkinView.classList.remove('hidden');
+        this.updateAcademySkinTab();
       };
     }
 
@@ -5346,6 +5618,18 @@ export class GameScene extends Phaser.Scene {
         element.classList.add('active');
         this.selectedAcademyHeroKey = element.getAttribute('data-hero') || 'warrior';
         this.updateAcademyEquipTab();
+      };
+    });
+
+    // 3b. Bind Hero selector buttons inside Skins Tab
+    const skinHeroBtns = document.querySelectorAll('.skin-hero-sel-btn');
+    skinHeroBtns.forEach(btn => {
+      const element = btn as HTMLButtonElement;
+      element.onclick = () => {
+        skinHeroBtns.forEach(b => b.classList.remove('active'));
+        element.classList.add('active');
+        this.selectedAcademyHeroKey = element.getAttribute('data-hero') || 'warrior';
+        this.updateAcademySkinTab();
       };
     });
 
@@ -5388,8 +5672,8 @@ export class GameScene extends Phaser.Scene {
     container.innerHTML = '';
 
     const heroes = [
-      { key: 'warrior', name: '레온 (Leon)', avatar: '🛡️', baseHp: 160, baseMp: 4, baseMove: 4 },
-      { key: 'mage', name: '아이샤 (Aisha)', avatar: '🔥', baseHp: 90, baseMp: 6, baseMove: 3 },
+      { key: 'warrior', name: '레온 (Leon)', avatar: '⚔️', baseHp: 160, baseMp: 4, baseMove: 4 },
+      { key: 'mage', name: '아이샤 (Aisha)', avatar: '🔮', baseHp: 90, baseMp: 6, baseMove: 3 },
       { key: 'archer', name: '로이 (Roy)', avatar: '🏹', baseHp: 110, baseMp: 4, baseMove: 4 },
       { key: 'cleric', name: '세라 (Sera)', avatar: '💚', baseHp: 100, baseMp: 5, baseMove: 3 },
       { key: 'rogue', name: '카엘 (Kael)', avatar: '🗡️', baseHp: 120, baseMp: 4, baseMove: 5 }
@@ -5530,8 +5814,8 @@ export class GameScene extends Phaser.Scene {
     if (!growth) return;
 
     const heroesInfo: Record<string, { name: string; avatar: string }> = {
-      warrior: { name: '레온 (Leon)', avatar: '🛡️' },
-      mage: { name: '아이샤 (Aisha)', avatar: '🔥' },
+      warrior: { name: '레온 (Leon)', avatar: '⚔️' },
+      mage: { name: '아이샤 (Aisha)', avatar: '🔮' },
       archer: { name: '로이 (Roy)', avatar: '🏹' },
       cleric: { name: '세라 (Sera)', avatar: '💚' },
       rogue: { name: '카엘 (Kael)', avatar: '🗡️' }
@@ -5656,17 +5940,111 @@ export class GameScene extends Phaser.Scene {
     this.updateAcademyEquipTab();
   }
 
+  private updateAcademySkinTab() {
+    const skinHeroBtns = document.querySelectorAll('.skin-hero-sel-btn');
+    skinHeroBtns.forEach(btn => {
+      const heroKey = btn.getAttribute('data-hero');
+      if (heroKey) {
+        const isSpawned = this.spawnedAllyKeys.length === 0 || this.spawnedAllyKeys.includes(heroKey);
+        (btn as HTMLElement).style.display = isSpawned ? 'inline-block' : 'none';
+      }
+    });
+
+    if (this.spawnedAllyKeys.length > 0 && !this.spawnedAllyKeys.includes(this.selectedAcademyHeroKey)) {
+      this.selectedAcademyHeroKey = this.spawnedAllyKeys[0];
+      skinHeroBtns.forEach(btn => {
+        const hk = btn.getAttribute('data-hero');
+        if (hk === this.selectedAcademyHeroKey) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      });
+    }
+
+    const growth = this.allyGrowthStats[this.selectedAcademyHeroKey];
+    if (!growth) return;
+
+    const heroesInfo: Record<string, { name: string; avatar: string }> = {
+      warrior: { name: '레온 (Leon)', avatar: '⚔️' },
+      mage: { name: '아이샤 (Aisha)', avatar: '🔮' },
+      archer: { name: '로이 (Roy)', avatar: '🏹' },
+      cleric: { name: '세라 (Sera)', avatar: '💚' },
+      rogue: { name: '카엘 (Kael)', avatar: '🗡️' }
+    };
+
+    let charName = heroesInfo[this.selectedAcademyHeroKey]?.name || '영웅';
+    let charAvatar = heroesInfo[this.selectedAcademyHeroKey]?.avatar || '🛡️';
+
+    if (growth.isPromoted) {
+      if (this.selectedAcademyHeroKey === 'warrior') { charName = '성기사 레온'; charAvatar = '👑'; }
+      else if (this.selectedAcademyHeroKey === 'mage') { charName = '대마도사 아이샤'; charAvatar = '🔮'; }
+      else if (this.selectedAcademyHeroKey === 'archer') { charName = '신궁 로이'; charAvatar = '🎯'; }
+      else if (this.selectedAcademyHeroKey === 'cleric') { charName = '대주교 세라'; charAvatar = '👼'; }
+      else if (this.selectedAcademyHeroKey === 'rogue') { charName = '그림자 카엘'; charAvatar = '👤'; }
+    }
+
+    const heroSkins = SKIN_PRESETS[this.selectedAcademyHeroKey] || [];
+    const equippedSkin = heroSkins.find(s => s.id === growth.equippedSkinId) || heroSkins[0];
+
+    const avatarDisplay = document.getElementById('skin-hero-visual-avatar');
+    const nameDisplay = document.getElementById('skin-hero-name-label');
+    const descDisplay = document.getElementById('skin-hero-desc');
+
+    if (avatarDisplay) {
+      avatarDisplay.textContent = equippedSkin ? equippedSkin.avatar : charAvatar;
+      if (equippedSkin) {
+        avatarDisplay.style.borderColor = '#' + equippedSkin.accentColor.toString(16).padStart(6, '0');
+      }
+    }
+    if (nameDisplay) nameDisplay.textContent = charName;
+    if (descDisplay) {
+      descDisplay.innerHTML = `현재 장착된 스킨: <strong style="color: #34d399;">${equippedSkin ? equippedSkin.name : '기본 스킨'}</strong><br>` +
+                             `<span style="color: #94a3b8; font-size: 0.74rem;">${equippedSkin ? equippedSkin.description : ''}</span>`;
+    }
+
+    const skinsContainer = document.getElementById('skins-grid-container');
+    if (!skinsContainer) return;
+    skinsContainer.innerHTML = '';
+
+    heroSkins.forEach(skin => {
+      const isEquipped = skin.id === growth.equippedSkinId;
+      const card = document.createElement('div');
+      card.className = `skin-card ${isEquipped ? 'equipped' : ''}`;
+      
+      const accentHtmlColor = '#' + skin.accentColor.toString(16).padStart(6, '0');
+      
+      card.innerHTML = `
+        <div class="skin-card-avatar" style="border-color: ${accentHtmlColor}; color: ${accentHtmlColor};">${skin.avatar}</div>
+        <div class="skin-card-info">
+          <div class="skin-card-name">${skin.name}</div>
+          <div class="skin-card-desc">${skin.description}</div>
+          ${isEquipped ? '<div class="skin-card-status">장착 완료</div>' : ''}
+        </div>
+      `;
+
+      card.onclick = () => {
+        growth.equippedSkinId = skin.id;
+        this.updateAcademySkinTab();
+        this.showDialogue('SYSTEM', `[${skin.name}] 장착 완료!`, 1200);
+      };
+      
+      skinsContainer.appendChild(card);
+    });
+  }
+
   private resetPermanentGrowth() {
     this.trainingSpheres = 0;
     this.sharedInventory = [];
     this.activeRunes = [];
     this.allyGrowthStats = {
-      warrior: { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null, isPromoted: false },
-      mage: { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null, isPromoted: false },
-      archer: { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null, isPromoted: false },
-      cleric: { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null, isPromoted: false },
-      rogue: { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null, isPromoted: false }
+      warrior: { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null, isPromoted: false, equippedSkinId: 'default' },
+      mage: { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null, isPromoted: false, equippedSkinId: 'default' },
+      archer: { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null, isPromoted: false, equippedSkinId: 'default' },
+      cleric: { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null, isPromoted: false, equippedSkinId: 'default' },
+      rogue: { bonusHp: 0, bonusDmg: 0, bonusMove: 0, bonusMp: 0, equippedWeapon: null, equippedArmor: null, isPromoted: false, equippedSkinId: 'default' }
     };
+    this.updateModeSelectionUI();
     document.getElementById('mode-selection-overlay')?.classList.remove('hidden');
   }
 
@@ -5681,5 +6059,101 @@ export class GameScene extends Phaser.Scene {
     this.time.delayedCall(durationMs, () => {
       box.classList.add('hidden');
     });
+  }
+
+  private updateChallengesHUD() {
+    const maxTurns = this.currentStageIndex < 3 ? 8 : (this.currentStageIndex < 6 ? 10 : (this.currentStageIndex < 9 ? 12 : 15));
+    const currentTurn = this.turnManager ? this.turnManager.getTurnNumber() : 1;
+    const isTimeStar = currentTurn <= maxTurns;
+    
+    const isEvenStage = (this.currentStageIndex % 2 === 0);
+    const gimmickName = isEvenStage ? "용암 회피" : "무퇴각 완승";
+    const isGimmickStar = isEvenStage ? !this.stageLavaDamaged : (this.stageRetreatedCount === 0);
+
+    const descTurns = document.getElementById('challenge-turns-desc');
+    const statusTurns = document.getElementById('challenge-turns-status');
+    const starTurns = document.getElementById('star-turns');
+
+    const descGimmick = document.getElementById('challenge-gimmick-desc');
+    const statusGimmick = document.getElementById('challenge-gimmick-status');
+    const starGimmick = document.getElementById('star-gimmick');
+
+    if (descTurns && statusTurns && starTurns) {
+      descTurns.textContent = `${maxTurns}턴 내 돌파 :`;
+      if (isTimeStar) {
+        statusTurns.textContent = `진행중 (${currentTurn}/${maxTurns})`;
+        statusTurns.style.color = '#60a5fa';
+        starTurns.textContent = '☆';
+        starTurns.style.color = '#facc15';
+      } else {
+        statusTurns.textContent = `실패 ❌ (${currentTurn}/${maxTurns})`;
+        statusTurns.style.color = '#f87171';
+        starTurns.textContent = '☆';
+        starTurns.style.color = '#94a3b8';
+      }
+    }
+
+    if (descGimmick && statusGimmick && starGimmick) {
+      descGimmick.textContent = `${gimmickName} :`;
+      if (isGimmickStar) {
+        statusGimmick.textContent = '🌟 완료가능';
+        statusGimmick.style.color = '#34d399';
+        starGimmick.textContent = '☆';
+        starGimmick.style.color = '#facc15';
+      } else {
+        statusGimmick.textContent = '실패 ❌';
+        statusGimmick.style.color = '#f87171';
+        starGimmick.textContent = '☆';
+        starGimmick.style.color = '#94a3b8';
+      }
+    }
+  }
+
+  private updateModeSelectionUI() {
+    const btnRune = document.getElementById('btn-mode-rune') as HTMLButtonElement | null;
+    const classicCleared = localStorage.getItem('classic_mode_cleared') === 'true';
+
+    if (btnRune) {
+      if (!classicCleared) {
+        btnRune.disabled = true;
+        btnRune.style.opacity = '0.55';
+        btnRune.style.cursor = 'not-allowed';
+        btnRune.style.borderColor = '#64748b';
+        btnRune.style.borderStyle = 'dashed';
+        const descSpan = btnRune.querySelector('span');
+        if (descSpan) {
+          descSpan.innerHTML = '🔒 클래식 모드를 전체 클리어(마지막 스테이지 완파)한 후에 해제됩니다.';
+          descSpan.style.color = '#f87171';
+        }
+      } else {
+        btnRune.disabled = false;
+        btnRune.style.opacity = '1.0';
+        btnRune.style.cursor = 'pointer';
+        btnRune.style.borderColor = '#facc15';
+        btnRune.style.borderStyle = 'solid';
+        const descSpan = btnRune.querySelector('span');
+        if (descSpan) {
+          descSpan.innerHTML = '매 스테이지 격파 시 강력한 버프 룬 카드를 영구 선택해 누적합니다.';
+          descSpan.style.color = '#fef08a';
+        }
+      }
+    }
+  }
+
+  private logDebug(message: string) {
+    console.log(`[DEBUG] ${message}`);
+    const content = document.getElementById('debug-log-content');
+    if (content) {
+      const now = new Date();
+      const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+      const entry = document.createElement('div');
+      entry.innerHTML = `<span style="color: #60a5fa;">[${timeStr}]</span> ${message}`;
+      content.appendChild(entry);
+      content.scrollTop = content.scrollHeight;
+      
+      while (content.childNodes.length > 50) {
+        content.removeChild(content.firstChild!);
+      }
+    }
   }
 }

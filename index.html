@@ -47,6 +47,26 @@
         </div>
       </div>
 
+      <!-- Star Challenges Side Panel -->
+      <div id="challenges-panel" class="glass-panel">
+        <div class="challenges-title">🏆 스테이지 도전과제</div>
+        <div class="challenge-item" id="challenge-clear">
+          <span class="challenge-star">★</span> <span>스테이지 클리어 :</span> <span class="challenge-status" style="color: #34d399;">🌟 성공</span>
+        </div>
+        <div class="challenge-item" id="challenge-turns">
+          <span class="challenge-star" id="star-turns">☆</span> <span id="challenge-turns-desc">8턴 내 돌파 :</span> <span class="challenge-status" id="challenge-turns-status" style="color: #60a5fa;">진행중</span>
+        </div>
+        <div class="challenge-item" id="challenge-gimmick">
+          <span class="challenge-star" id="star-gimmick">☆</span> <span id="challenge-gimmick-desc">용암 회피 :</span> <span class="challenge-status" id="challenge-gimmick-status" style="color: #34d399;">🌟 완료가능</span>
+        </div>
+      </div>
+
+      <!-- Debug Log Panel -->
+      <div id="debug-log-panel" class="glass-panel">
+        <div class="debug-title">⚙️ 시스템 디버그 로그</div>
+        <div id="debug-log-content"></div>
+      </div>
+
       <!-- Hover HUD (Floating upper-center HUD) -->
       <div id="hover-hud" class="glass-panel hidden">
         <span id="hud-avatar">🤖</span>
@@ -153,6 +173,7 @@
           <div class="academy-tabs">
             <button id="tab-btn-train" class="tab-btn active">🌟 능력치 훈련</button>
             <button id="tab-btn-equip" class="tab-btn">🎒 장비 및 인벤토리</button>
+            <button id="tab-btn-skin" class="tab-btn">🎭 스킨 장착</button>
           </div>
 
           <!-- TAB 1: Stats Training View -->
@@ -206,6 +227,38 @@
                 <h4>🎒 공용 인벤토리 보관함 (Shared Inventory)</h4>
                 <div id="inventory-grid-container">
                   <!-- Grid list of Item cards -->
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 3: Skin Customization View -->
+          <div id="academy-tab-skin" class="tab-content-view hidden">
+            <p class="academy-subtitle" style="margin-top: 5px;">영웅들의 외형 스킨을 교체하여 새로운 모습으로 참전하세요.</p>
+            
+            <div class="equip-split-container">
+              <!-- Left: Selected Hero Details & Skin Slots -->
+              <div class="equip-left-panel">
+                <div class="skin-hero-selector-bar" style="display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap;">
+                  <button class="skin-hero-sel-btn active" data-hero="warrior" style="font-family: DungGeunMo, monospace; font-size: 0.8rem; padding: 5px 10px; background: rgba(30,41,59,0.8); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: white; cursor: pointer;">🛡️ 전사</button>
+                  <button class="skin-hero-sel-btn" data-hero="mage" style="font-family: DungGeunMo, monospace; font-size: 0.8rem; padding: 5px 10px; background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #94a3b8; cursor: pointer;">🔥 법사</button>
+                  <button class="skin-hero-sel-btn" data-hero="archer" style="font-family: DungGeunMo, monospace; font-size: 0.8rem; padding: 5px 10px; background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #94a3b8; cursor: pointer;">🏹 궁수</button>
+                  <button class="skin-hero-sel-btn" data-hero="cleric" style="font-family: DungGeunMo, monospace; font-size: 0.8rem; padding: 5px 10px; background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #94a3b8; cursor: pointer;">💚 사제</button>
+                  <button class="skin-hero-sel-btn" data-hero="rogue" style="font-family: DungGeunMo, monospace; font-size: 0.8rem; padding: 5px 10px; background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #94a3b8; cursor: pointer;">🗡️ 도적</button>
+                </div>
+                
+                <div class="equip-hero-status-panel" style="margin-top: 15px; text-align: center;">
+                  <div id="skin-hero-visual-avatar" style="width: 60px; height: 60px; font-size: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 10px; background: #1e1b4b; border: 2.5px solid #38bdf8;">🛡️</div>
+                  <h3 id="skin-hero-name-label" style="font-family: DungGeunMo, monospace; color: #38bdf8; font-size: 1.1rem;">레온 (Leon)</h3>
+                  <p id="skin-hero-desc" style="font-size: 0.78rem; color: #94a3b8; margin-top: 5px; line-height: 1.4;">현재 장착된 스킨: 기본 스킨</p>
+                </div>
+              </div>
+              
+              <!-- Right: Available Skins List -->
+              <div class="equip-right-panel">
+                <h4>🎭 보유 스킨 목록 (Available Skins)</h4>
+                <div id="skins-grid-container" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 10px; overflow-y: auto; max-height: 250px; padding-right: 5px;">
+                  <!-- Dynamic skins list populated by script -->
                 </div>
               </div>
             </div>
